@@ -1,0 +1,93 @@
+/**
+ * locus-sdk — on-device GNSS integrity monitoring for Expo (Android).
+ *
+ * Pipeline: Sensors -> Sensor Validation -> Fusion Estimator -> Integrity
+ * Evaluation (seven physics checks) -> Spoof/Anomaly Engine -> Safety State
+ * Machine -> consumer. AI (ExecuTorch) explains verdicts in plain language and
+ * never touches state.
+ */
+
+// Raw GNSS C/N0 measurement stream (native module binding).
+export {
+  default as LocusGnss,
+  default as AnchorGnss,
+  type LocusGnssSatellite,
+  type LocusGnssMeasurementEvent,
+  type LocusGnssErrorEvent,
+  type LocusGnssStatus,
+  type LocusGnssStatusEvent,
+  type AnchorGnssSatellite,
+  type AnchorGnssMeasurementEvent,
+  type AnchorGnssErrorEvent,
+  type AnchorGnssStatus,
+  type AnchorGnssStatusEvent,
+} from './gnss/LocusGnssModule';
+
+// Network-integrity signals (real OS-level VPN detection).
+export {
+  default as LocusNet,
+  default as AnchorNet,
+} from './gnss/LocusNetModule';
+
+// Sensor hooks and their pure helpers.
+export { useLocationStream } from './sensors/useLocationStream';
+export { locationToFix } from './sensors/fixMapping';
+export { useImuStream, MAG_FIELD_MIN_UT, MAG_FIELD_MAX_UT } from './sensors/useImuStream';
+export { magnetometerHeadingDeg, wrapAngleDelta } from './sensors/headingMath';
+export { useBarometerStream } from './sensors/useBarometerStream';
+export { useGnssMeasurements } from './sensors/useGnssMeasurements';
+
+// Physics checks and supporting formulas.
+export { kinematicCheck } from './physics/kinematicCheck';
+export { headingCheck } from './physics/headingCheck';
+export { temporalCheck } from './physics/temporalCheck';
+export { altitudeCheck, barometricAltitudeMeters, BARO_REFERENCE_PRESSURE_HPA } from './physics/altitudeCheck';
+export { environmentalCheck } from './physics/environmentalCheck';
+export { cn0Check } from './physics/cn0Check';
+export { networkCheck } from './physics/networkCheck';
+export { solarCompassHeading } from './physics/solarCompass';
+export { haversineMeters, forwardBearingDeg, circularDiffDeg, clamp01 } from './physics/geo';
+
+// Safety state machine (deterministic, pure).
+export {
+  evaluateIntegrity,
+  stepIntegrity,
+  confidenceOf,
+  RECOVERY_DEBOUNCE,
+  type IntegrityMachine,
+  type EvaluateResult,
+} from './evaluateIntegrity';
+
+// Public SDK (state machine owner + lazy AI that can never touch state).
+export { createLocusSDK, createAnchorSDK } from './ai/createLocusSDK';
+export {
+  LocusProvider,
+  AnchorProvider,
+  type LocusProviderProps,
+  type AnchorProviderProps,
+} from './ai/LocusProvider';
+export { explainVerdict, buildExplanationPrompt, ADVISORY_LATENCY_BUDGET_MS } from './ai/explainVerdict';
+export {
+  subscribeModelDownloads,
+  getModelDownloadStates,
+  type ModelTask,
+  type ModelDownloadState,
+} from './ai/executorchRuntime';
+export { embedText } from './ai/embedText';
+export { transcribeCommand } from './ai/transcribeCommand';
+
+// Shared contract types.
+export type {
+  LocusSDK,
+  AnchorSDK,
+  IntegrityState,
+  CheckId,
+  CheckResult,
+  Fix,
+  ImuSample,
+  BaroSample,
+  SatelliteMeasurement,
+  GnssMeasurementSample,
+  SensorWindow,
+  Verdict,
+} from './types';
