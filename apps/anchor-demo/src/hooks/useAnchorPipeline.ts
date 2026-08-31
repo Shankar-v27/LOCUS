@@ -23,6 +23,7 @@ import type {
 import { createAnchorSDK } from 'anchor-sdk';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { broadcastToOfficeKit } from '@/services/locusSyncBroadcaster';
 
 export const WINDOW_FIX_CAP = 12;
 export const WINDOW_IMU_CAP = 60;
@@ -238,6 +239,8 @@ export function useAnchorPipeline() {
         embedding: null,
       };
       setEvents((prev) => [entry, ...prev]);
+      // Non-blocking observer: export event to Office Kit if reachable
+      broadcastToOfficeKit(entry).catch(() => {});
       // REAL on-device advisory enrichment (Qwen3 0.6B + mpnet embeddings),
       // latency-capped by the SDK watchdog. The UI shows the deterministic
       // reason until the model produces text.
@@ -245,7 +248,9 @@ export function useAnchorPipeline() {
         .explain(v)
         .then((explanation: string) => {
           if (generationRef.current !== gen) return;
-          setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, explanation } : e)));
+          const enriched = { ...entry, explanation };
+          setEvents((prev) => prev.map((e) => (e.id === id ? enriched : e)));
+          broadcastToOfficeKit(enriched).catch(() => {});
         })
         .catch(() => {
           if (generationRef.current !== gen) return;
@@ -609,3 +614,6 @@ export function useAnchorPipeline() {
     sdk,
   };
 }
+
+/** Canonical LOCUS pipeline hook. */
+export const useLocusPipeline = useAnchorPipeline;

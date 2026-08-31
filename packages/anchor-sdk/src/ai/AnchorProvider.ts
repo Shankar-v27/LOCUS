@@ -34,3 +34,7 @@ export function AnchorProvider({
 
   return children ?? null;
 }
+
+/** Canonical LOCUS AI Preloader Provider. */
+export const LocusProvider = AnchorProvider;
+export type LocusProviderProps = AnchorProviderProps;

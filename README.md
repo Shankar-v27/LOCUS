@@ -1,11 +1,12 @@
-# Anchor
+# LOCUS
 
-**On-device GPS integrity monitoring for Android.** Anchor continuously cross-examines raw GNSS measurements against the phone's own physics — inertial sensors, barometer, magnetometer, and the sun itself — through six independent consistency checks, then feeds them into a deterministic RAIM/FDE-derived state machine that classifies every fix as **TRUSTED**, **DEGRADED**, **DENIED**, or **RECOVERING**. A fully offline AI stack — an on-device LLM, speech recognizer, and embedder running via ExecuTorch — explains every verdict, takes voice commands, and powers semantic search over the flight-recorder log, without ever sending a byte to the cloud.
+**On-device GNSS integrity monitoring & fleet security console.** LOCUS continuously cross-examines raw GNSS measurements against the phone's own physics — inertial sensors, barometer, magnetometer, and the sun itself — through seven independent consistency checks, then feeds them into a deterministic RAIM/FDE-derived state machine that classifies every fix as **TRUSTED**, **DEGRADED**, **DENIED**, or **RECOVERING**. A fully offline AI stack — an on-device LLM, speech recognizer, and embedder running via ExecuTorch — explains every verdict, takes voice commands, and powers semantic search over the flight-recorder log, without ever sending a byte to the cloud.
 
 The repo is an npm-workspaces monorepo:
 
-- [`packages/anchor-sdk`](packages/anchor-sdk) — the engine: Expo native module (Android) exposing raw satellite measurements, sensor streams, six physics checks, the RAIM/FDE state machine, and the on-device AI layer.
-- [`apps/anchor-demo`](apps/anchor-demo) — the cockpit: an Expo SDK 57 demo app with an avionics glass-cockpit UI that exercises every SDK capability.
+- [`packages/anchor-sdk`](packages/anchor-sdk) — the engine: Expo native module (Android) exposing raw satellite measurements, sensor streams, seven consistency checks, the RAIM/FDE state machine, and the on-device AI layer.
+- [`apps/anchor-demo`](apps/anchor-demo) — the mobile cockpit: an Expo SDK 57 app with an avionics glass-cockpit UI that runs on physical devices.
+- [`apps/locus-office-kit`](apps/locus-office-kit) — the operator console: a React + Vite fleet monitoring console for fleet-wide integrity visualization and incident response.
 
 ## Table of contents
 

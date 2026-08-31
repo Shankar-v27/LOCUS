@@ -112,3 +112,6 @@ export interface AnchorSDK {
   transcribe(audio: Float32Array): Promise<string>;
   embed(text: string): Promise<number[]>;
 }
+
+/** Canonical LOCUS SDK contract. */
+export type LocusSDK = AnchorSDK;

@@ -1,5 +1,5 @@
 {
-  "name": "anchor",
+  "name": "locus",
   "private": true,
   "workspaces": [
     "packages/*",

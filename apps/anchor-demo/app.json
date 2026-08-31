@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "Anchor",
-    "slug": "anchor",
+    "name": "LOCUS",
+    "slug": "locus",
     "version": "1.0.0",
-    "scheme": "anchor",
+    "scheme": "locus",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "dark",
@@ -13,7 +13,7 @@
       "supportsTablet": false
     },
     "android": {
-      "package": "com.christopherjoshy.anchor",
+      "package": "com.christopherjoshy.locus",
       "adaptiveIcon": {
         "backgroundColor": "#0C1116",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

@@ -1,6 +1,26 @@
 # Changelog
 
-## 2026-08-30 — feat: network consistency check (VPN = inconsistency), debounced recovery, qwen3-0.6b advisory, zero-mock hardening, emulator-verified end-to-end
+## 2026-08-31 — feat: LOCUS Office Kit MVP, real device sync bridge, mobile baseline stabilization, and LOCUS branding migration
+
+### Mobile & SDK Baseline Stabilization
+- **Flight Log Transition Recording Fix** (`apps/anchor-demo/src/hooks/useAnchorPipeline.ts`): Immediate insertion of machine-state transitions (`setEvents((prev) => [entry, ...prev])`) in `recordTransition` so `TRUSTED`/`DEGRADED`/`DENIED`/`RECOVERING` events immediately populate the log, receive asynchronous Qwen3 explanations, and receive vector embeddings for semantic search.
+- **Nested VirtualizedList Fix** (`apps/anchor-demo/src/components/EventLog.tsx`): Replaced nested vertical `FlatList` with mapped `View` elements within the dashboard's parent `ScrollView`, eliminating React Native virtualized list nesting warnings while preserving newest-first ordering and styling.
+- **ExecuTorch Model Loading Queue & Retry** (`packages/anchor-sdk/src/ai/executorchRuntime.ts`): Implemented `DownloadQueue` with sequential model loading (`loadLlm` → `loadSpeechToText` → `loadTextEmbeddings`) and exponential retry backoff, resolving socket exhaustion (`Software caused connection abort`) during startup.
+- **Non-Invasive Event Broadcaster** (`apps/anchor-demo/src/services/locusSyncBroadcaster.ts`): Added asynchronous, non-blocking fire-and-forget observer dispatching authoritative verdicts to Office Kit via local HTTP/SSE (`/api/events`) without altering on-device state-machine timing or evaluation guarantees.
+
+### LOCUS Office Kit MVP (`apps/locus-office-kit`)
+- **Modern Operator Console**: React 19 + Vite + TypeScript application with dense avionics dark styling (`#0C1116`, `#151B21`, `#00D9A3`, `#FF3B30`), monospace tabular numerals, and high-contrast alert displays.
+- **Real vs. Simulated Node Model**: Explicit source labeling (`REAL_DEVICE` vs `SIMULATED`) across Fleet Overview, Metrics Bar, Live Incident Alert Panel, Event History Table, and Device Details Modal.
+- **Local Real-Device Ingestion**: Vite middleware providing `/api/events` (HTTP POST with CORS) and `/api/stream` (Server-Sent Events) for real device synchronization alongside `BroadcastChannel` browser-local synchronization.
+- **Live Incident Response**: Real-time alert feed rendering failed checks chips (`KINEMATIC`, `CN0`, `HEADING`, `ALTITUDE`, `NETWORK`), physical confidence gauges, on-device Qwen3 plain-language advisory explanations, and 5-epoch debounce recovery triggers.
+- **Demo Attack & Recovery Harness**: Interactive stage controls for Kinematic Teleport, C/N0 Multi-SV Lockstep, Solar Heading Divergence, and 5-Epoch Debounce Recovery.
+
+### Canonical LOCUS Product Branding
+- **Mobile Metadata**: Updated `app.json` name to `LOCUS`, slug to `locus`, scheme to `locus`, Android package to `com.christopherjoshy.locus`.
+- **SDK Exports**: Exported canonical aliases `LocusSDK`, `createLocusSDK`, `LocusProvider`, `LocusProviderProps`, `useLocusPipeline` in `packages/anchor-sdk`.
+- **UI & Logs**: Updated Primer screen brand text to `LOCUS`, startup log prefix to `[locus:startup]`, and standalone release artifact to `locus.apk`.
+- **Docs**: Updated `README.md`, `AGENTS.md`, and root `package.json`.
+
 
 ### SDK (packages/anchor-sdk)
 - NEW 7th check `networkCheck` (`src/physics/networkCheck.ts`): a real OS VPN signal (`SensorWindow.network`, from AnchorNet) fails the check while a tunnel is up — the instrument never holds TRUSTED with a VPN; absent signal abstains (passes with note), never invents values

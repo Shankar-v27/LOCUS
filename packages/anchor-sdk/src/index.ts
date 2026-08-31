@@ -50,8 +50,13 @@ export {
 } from './evaluateIntegrity';
 
 // Public SDK (state machine owner + lazy AI that can never touch state).
-export { createAnchorSDK } from './ai/createAnchorSDK';
-export { AnchorProvider, type AnchorProviderProps } from './ai/AnchorProvider';
+export { createAnchorSDK, createLocusSDK } from './ai/createAnchorSDK';
+export {
+  AnchorProvider,
+  LocusProvider,
+  type AnchorProviderProps,
+  type LocusProviderProps,
+} from './ai/AnchorProvider';
 export { explainVerdict, buildExplanationPrompt, ADVISORY_LATENCY_BUDGET_MS } from './ai/explainVerdict';
 export {
   subscribeModelDownloads,
@@ -65,6 +70,7 @@ export { transcribeCommand } from './ai/transcribeCommand';
 // Shared contract types.
 export type {
   AnchorSDK,
+  LocusSDK,
   IntegrityState,
   CheckId,
   CheckResult,

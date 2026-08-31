@@ -49,3 +49,6 @@ export function createAnchorSDK(): AnchorSDK {
     },
   };
 }
+
+/** Canonical LOCUS SDK factory. */
+export const createLocusSDK = createAnchorSDK;

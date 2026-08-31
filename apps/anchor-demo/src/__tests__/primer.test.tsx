@@ -27,7 +27,7 @@ describe('permissions primer', () => {
     ).toBeTruthy();
     expect(screen.getByText("Microphone — hears voice commands like 'simulate spoof'")).toBeTruthy();
     expect(screen.getByText('CONTINUE')).toBeTruthy();
-    expect(screen.getByText('ANCHOR')).toBeTruthy();
+    expect(screen.getByText('LOCUS')).toBeTruthy();
     expect(screen.getByText('GNSS INTEGRITY MONITOR')).toBeTruthy();
     expect(screen.getByText('GPS')).toBeTruthy();
     expect(screen.getByText('MIC')).toBeTruthy();

@@ -1,11 +1,11 @@
 /**
- * Startup milestone logging. Every milestone is tagged `[anchor:startup]` so
- * `adb logcat | grep "anchor:startup"` shows exactly where boot stalls — a
+ * Startup milestone logging. Every milestone is tagged `[locus:startup]` so
+ * `adb logcat | grep "locus:startup"` shows exactly where boot stalls — a
  * production blank screen must never be silent.
  */
 type Level = 'INFO' | 'WARN' | 'ERROR';
 
-const PREFIX = '[anchor:startup]';
+const PREFIX = '[locus:startup]';
 
 export function consoleLog(level: Level, message: string): void {
   const line = `${PREFIX} ${message}`;

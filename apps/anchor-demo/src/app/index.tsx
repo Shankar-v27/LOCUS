@@ -78,7 +78,7 @@ export default function PrimerScreen() {
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Image source={require('../../assets/images/splash-icon.png')} style={styles.glyph} />
-        <Text style={styles.brand}>ANCHOR</Text>
+        <Text style={styles.brand}>LOCUS</Text>
         <Text style={styles.subline}>GNSS INTEGRITY MONITOR</Text>
       </View>
 
