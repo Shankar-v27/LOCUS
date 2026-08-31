@@ -56,13 +56,51 @@ async function ensureInitialized(): Promise<void> {
   initialized = true;
 }
 
-/** Caches a load promise, resetting it on failure so a later call can retry. */
-function cached<T>(slot: { promise: Promise<T> | null }, load: () => Promise<T>): Promise<T> {
+// --- Serialized Download Queue & Retry ---------------------------------------
+
+class DownloadQueue {
+  private tail: Promise<void> = Promise.resolve();
+
+  enqueue<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.tail.then(() => fn());
+    this.tail = next.then(
+      () => {},
+      () => {},
+    );
+    return next;
+  }
+}
+
+const queue = new DownloadQueue();
+
+function cachedWithQueue<T>(
+  slot: { promise: Promise<T> | null },
+  task: ModelTask,
+  loadFn: () => Promise<T>,
+  maxRetries = 2,
+): Promise<T> {
   if (slot.promise) return slot.promise;
-  slot.promise = load().catch((error: unknown) => {
-    slot.promise = null;
-    throw error;
-  });
+
+  slot.promise = queue
+    .enqueue(async () => {
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+        try {
+          return await loadFn();
+        } catch (error) {
+          lastError = error;
+          if (attempt <= maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+          }
+        }
+      }
+      throw lastError;
+    })
+    .catch((error: unknown) => {
+      slot.promise = null;
+      throw error;
+    });
+
   return slot.promise;
 }
 
@@ -113,7 +151,7 @@ const embeddingsSlot: { promise: Promise<TextEmbeddingsModule> | null } = { prom
  * the demo requires while keeping the accuracy the constrained prompt needs.
  */
 export function loadLlm(): Promise<LLMModule> {
-  return cached(llmSlot, async () => {
+  return cachedWithQueue(llmSlot, 'llm', async () => {
     await ensureInitialized();
     const executorch = await import('react-native-executorch');
     const instance = await executorch.LLMModule.fromModelName(
@@ -127,7 +165,7 @@ export function loadLlm(): Promise<LLMModule> {
 
 /** Whisper base.en (English-only, 16 kHz mono input). */
 export function loadSpeechToText(): Promise<SpeechToTextModule> {
-  return cached(sttSlot, async () => {
+  return cachedWithQueue(sttSlot, 'speechToText', async () => {
     await ensureInitialized();
     const executorch = await import('react-native-executorch');
     const instance = await executorch.SpeechToTextModule.fromModelName(
@@ -142,7 +180,7 @@ export function loadSpeechToText(): Promise<SpeechToTextModule> {
 
 /** all-mpnet-base-v2 pooled sentence embeddings (768-d). */
 export function loadTextEmbeddings(): Promise<TextEmbeddingsModule> {
-  return cached(embeddingsSlot, async () => {
+  return cachedWithQueue(embeddingsSlot, 'textEmbeddings', async () => {
     await ensureInitialized();
     const executorch = await import('react-native-executorch');
     const instance = await executorch.TextEmbeddingsModule.fromModelName(
@@ -154,10 +192,30 @@ export function loadTextEmbeddings(): Promise<TextEmbeddingsModule> {
   });
 }
 
-/** Fire-and-forget pre-warm used by AnchorProvider; errors are rethrown at call time. */
+/** Pre-warm used by AnchorProvider; loads models sequentially to prevent socket exhaustion. */
 export function preloadModels(options: PreloadOptions = {}): void {
   const { llm = true, speechToText = true, textEmbeddings = true } = options;
-  if (llm) loadLlm().catch(() => undefined);
-  if (speechToText) loadSpeechToText().catch(() => undefined);
-  if (textEmbeddings) loadTextEmbeddings().catch(() => undefined);
+  (async () => {
+    if (llm) {
+      try {
+        await loadLlm();
+      } catch {
+        // Errors caught here so remaining models can preload; explicit calls will re-throw
+      }
+    }
+    if (speechToText) {
+      try {
+        await loadSpeechToText();
+      } catch {
+        // Errors caught here
+      }
+    }
+    if (textEmbeddings) {
+      try {
+        await loadTextEmbeddings();
+      } catch {
+        // Errors caught here
+      }
+    }
+  })();
 }

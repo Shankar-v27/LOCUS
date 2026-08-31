@@ -237,6 +237,7 @@ export function useAnchorPipeline() {
         explanation: null,
         embedding: null,
       };
+      setEvents((prev) => [entry, ...prev]);
       // REAL on-device advisory enrichment (Qwen3 0.6B + mpnet embeddings),
       // latency-capped by the SDK watchdog. The UI shows the deterministic
       // reason until the model produces text.

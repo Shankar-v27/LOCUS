@@ -4,8 +4,7 @@
  */
 import { colors, colorForIntegrityState, fonts, hairline, monoNumeric, spacing } from '@/theme';
 import type { EventLogEntry } from '@/hooks/useAnchorPipeline';
-import { useCallback } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 function formatClock(ts: number): string {
   const d = new Date(ts);
@@ -36,25 +35,17 @@ function EventRow({ entry }: { entry: EventLogEntry }) {
 }
 
 export function EventLog({ events }: { events: EventLogEntry[] }) {
-  const renderItem = useCallback(
-    ({ item }: { item: EventLogEntry }) => <EventRow entry={item} />,
-    [],
-  );
-
   return (
     <View style={styles.panel}>
       <View style={styles.header}>
         <Text style={styles.headerText}>EVENT LOG</Text>
         <Text style={styles.headerCount}>{events.length.toString().padStart(3, '0')}</Text>
       </View>
-      <FlatList
-        data={events}
-        keyExtractor={(e) => e.id.toString()}
-        renderItem={renderItem}
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        initialNumToRender={12}
-      />
+      <View style={styles.listContent}>
+        {events.map((entry) => (
+          <EventRow key={entry.id} entry={entry} />
+        ))}
+      </View>
     </View>
   );
 }
