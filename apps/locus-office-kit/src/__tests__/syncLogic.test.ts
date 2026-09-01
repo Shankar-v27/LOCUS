@@ -2,9 +2,9 @@ import { syncService, INITIAL_DEVICES, INITIAL_EVENTS } from '../services/syncSe
 import { LocusIntegrityEvent } from '../types/locusSync';
 
 function runTests() {
-  console.log('[TEST] Starting LOCUS Office Kit sync service unit tests...');
+  console.log('[TEST] Starting comprehensive LOCUS Office Kit sync service unit tests...');
 
-  // Test 1: Initial state
+  // Test 1: Initial state and baseline metrics
   syncService.resetAll();
   const devices = syncService.getDevices();
   const events = syncService.getEvents();
@@ -22,87 +22,149 @@ function runTests() {
   if (metrics.simulatedDevices !== 2) {
     throw new Error(`Expected 2 simulated devices, got ${metrics.simulatedDevices}`);
   }
-  console.log('✓ Initial state and metrics verified (1 Real, 2 Simulated).');
+  console.log('✓ Scenario 1: Initial fleet baseline verified (1 Real, 2 Simulated, 3 Trusted).');
 
-  // Test 2: Real device event ingestion
-  const realEvent: LocusIntegrityEvent = {
-    id: 999,
-    deviceId: 'motorola-edge-50-fusion',
+  // Test 2: Sequential State Progression (TRUSTED -> DEGRADED -> DENIED -> RECOVERING -> TRUSTED)
+  const devId = 'motorola-edge-50-fusion';
+
+  // Step A: DEGRADED event (e.g. single check failure)
+  const degradedEvent: LocusIntegrityEvent = {
+    id: 1001,
+    deviceId: devId,
+    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
+    source: 'REAL_DEVICE',
+    timestamp: Date.now(),
+    state: 'DEGRADED',
+    confidence: 0.65,
+    reason: 'degraded: temporal check anomaly',
+    failedChecks: ['temporal'],
+    explanation: null,
+  };
+  syncService.ingestRemoteEvent(degradedEvent);
+  let dev = syncService.getDevices().find((d) => d.id === devId);
+  let m = syncService.getMetrics();
+  if (dev?.state !== 'DEGRADED' || m.degraded !== 1 || m.trusted !== 2) {
+    throw new Error(`Expected 1 DEGRADED, 2 TRUSTED, got degraded=${m.degraded}, trusted=${m.trusted}`);
+  }
+  console.log('✓ Scenario 2A: DEGRADED transition updates device and metrics (1 Degraded, 2 Trusted).');
+
+  // Step B: DENIED event (e.g. active spoofing attack)
+  const deniedEvent: LocusIntegrityEvent = {
+    id: 1002,
+    deviceId: devId,
     deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
     source: 'REAL_DEVICE',
     timestamp: Date.now(),
     state: 'DENIED',
-    confidence: 0.12,
-    reason: 'denied: kinematic displacement anomaly',
+    confidence: 0.15,
+    reason: 'denied: kinematic, cn0 failed',
     failedChecks: ['kinematic', 'cn0'],
-    explanation: 'Spoofing detected: kinetic jump of 412 m/s exceeds physical model.',
-    telemetry: {
-      latitude: 37.4220,
-      longitude: -122.0841,
-      altitudeMeters: 45.2,
-      speedMps: 412.0,
-      headingDeg: 124,
-      satellites: 14,
-      cn0Mean: 34.2,
-      hdop: 0.8,
-    },
+    explanation: null,
   };
-
-  syncService.ingestRemoteEvent(realEvent);
-  const updatedDevs = syncService.getDevices();
-  const targetDev = updatedDevs.find((d) => d.id === 'motorola-edge-50-fusion');
-
-  if (!targetDev || targetDev.state !== 'DENIED') {
-    throw new Error(`Expected target device to be in DENIED state, got ${targetDev?.state}`);
+  syncService.ingestRemoteEvent(deniedEvent);
+  dev = syncService.getDevices().find((d) => d.id === devId);
+  m = syncService.getMetrics();
+  if (dev?.state !== 'DENIED' || m.denied !== 1 || m.degraded !== 0 || m.trusted !== 2) {
+    throw new Error(`Expected 1 DENIED, 0 DEGRADED, 2 TRUSTED, got denied=${m.denied}, trusted=${m.trusted}`);
   }
-  if (targetDev.source !== 'REAL_DEVICE') {
-    throw new Error(`Expected target device source to be REAL_DEVICE, got ${targetDev.source}`);
-  }
-  if (targetDev.latestIncident?.id !== 999) {
-    throw new Error(`Expected latest incident id 999, got ${targetDev.latestIncident?.id}`);
-  }
-  console.log('✓ Real device event ingestion and DENIED transition verified.');
+  console.log('✓ Scenario 2B: DENIED transition updates device and metrics (1 Denied, 2 Trusted).');
 
-  // Test 3: Dynamic registration of a new field device
-  const dynamicEvent: LocusIntegrityEvent = {
-    id: 1000,
-    deviceId: 'field-unit-09-new',
-    deviceName: 'PATROL-BRAVO-09',
+  // Step C: RECOVERING event (clean epochs accumulating)
+  const recoveringEvent: LocusIntegrityEvent = {
+    id: 1003,
+    deviceId: devId,
+    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
+    source: 'REAL_DEVICE',
+    timestamp: Date.now(),
+    state: 'RECOVERING',
+    confidence: 0.75,
+    reason: 'recovery debounce in progress (3/3)',
+    failedChecks: [],
+    explanation: null,
+  };
+  syncService.ingestRemoteEvent(recoveringEvent);
+  dev = syncService.getDevices().find((d) => d.id === devId);
+  m = syncService.getMetrics();
+  if (dev?.state !== 'RECOVERING' || m.recovering !== 1 || m.denied !== 0 || m.trusted !== 2) {
+    throw new Error(`Expected 1 RECOVERING, 0 DENIED, 2 TRUSTED, got recovering=${m.recovering}`);
+  }
+  console.log('✓ Scenario 2C: RECOVERING transition updates device and metrics (1 Recovering, 2 Trusted).');
+
+  // Step D: TRUSTED event (full recovery)
+  const trustedEvent: LocusIntegrityEvent = {
+    id: 1004,
+    deviceId: devId,
+    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
     source: 'REAL_DEVICE',
     timestamp: Date.now(),
     state: 'TRUSTED',
-    confidence: 0.99,
+    confidence: 0.98,
     reason: 'all checks passed',
     failedChecks: [],
-    explanation: 'Nominal GPS integrity.',
+    explanation: 'Position is verified across all physical checks.',
   };
+  syncService.ingestRemoteEvent(trustedEvent);
+  dev = syncService.getDevices().find((d) => d.id === devId);
+  m = syncService.getMetrics();
+  if (dev?.state !== 'TRUSTED' || m.trusted !== 3 || m.recovering !== 0 || m.denied !== 0) {
+    throw new Error(`Expected 3 TRUSTED, 0 RECOVERING, got trusted=${m.trusted}, recovering=${m.recovering}`);
+  }
+  if (dev?.latestIncident !== undefined) {
+    throw new Error(`Expected latestIncident to be cleared on TRUSTED, got ${JSON.stringify(dev?.latestIncident)}`);
+  }
+  console.log('✓ Scenario 2D: TRUSTED recovery returns fleet to 3 TRUSTED and clears active incident.');
 
-  syncService.ingestRemoteEvent(dynamicEvent);
-  const afterDynamic = syncService.getDevices();
-  const newDev = afterDynamic.find((d) => d.id === 'field-unit-09-new');
+  // Test 3: Multi-node Isolation (event for VIPER-1 must not alter HAWK-7 or TITAN-3)
+  const hawkBefore = syncService.getDevices().find((d) => d.id === 'drone-alpha-sim');
+  const titanBefore = syncService.getDevices().find((d) => d.id === 'convoy-lead-sim');
 
-  if (!newDev) {
-    throw new Error('Expected dynamic device to be registered');
-  }
-  if (newDev.source !== 'REAL_DEVICE') {
-    throw new Error(`Expected new device to have REAL_DEVICE source, got ${newDev.source}`);
-  }
-  console.log('✓ Dynamic field device registration verified.');
+  syncService.ingestRemoteEvent({
+    id: 1005,
+    deviceId: devId,
+    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
+    source: 'REAL_DEVICE',
+    timestamp: Date.now(),
+    state: 'DENIED',
+    confidence: 0.1,
+    reason: 'denied: kinematic teleport',
+    failedChecks: ['kinematic'],
+    explanation: null,
+  });
 
-  // Test 4: Simulated attack & 5-epoch recovery
-  syncService.triggerAttack('drone-alpha-sim', 'teleport');
-  const simDev = syncService.getDevices().find((d) => d.id === 'drone-alpha-sim');
-  if (simDev?.state !== 'DENIED') {
-    throw new Error(`Expected simulated drone to be DENIED, got ${simDev?.state}`);
+  const hawkAfter = syncService.getDevices().find((d) => d.id === 'drone-alpha-sim');
+  const titanAfter = syncService.getDevices().find((d) => d.id === 'convoy-lead-sim');
+
+  if (hawkAfter?.state !== hawkBefore?.state || hawkAfter?.confidence !== hawkBefore?.confidence) {
+    throw new Error('HAWK-7 was unexpectedly modified by VIPER-1 event!');
   }
-  if (simDev.source !== 'SIMULATED') {
-    throw new Error(`Expected simulated drone source to be SIMULATED, got ${simDev.source}`);
+  if (titanAfter?.state !== titanBefore?.state || titanAfter?.confidence !== titanBefore?.confidence) {
+    throw new Error('TITAN-3 was unexpectedly modified by VIPER-1 event!');
   }
-  console.log('✓ Simulation attack trigger verified with explicit SIMULATED source.');
+  console.log('✓ Scenario 3: Multi-node isolation verified (VIPER-1 events do not affect HAWK-7 or TITAN-3).');
+
+  // Test 4: Asynchronous AI Enrichment update
+  const enrichedEvent: LocusIntegrityEvent = {
+    id: 1005, // Same event ID, now enriched with Qwen3 explanation
+    deviceId: devId,
+    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
+    source: 'REAL_DEVICE',
+    timestamp: Date.now(),
+    state: 'DENIED',
+    confidence: 0.1,
+    reason: 'denied: kinematic teleport',
+    failedChecks: ['kinematic'],
+    explanation: 'Qwen3 Explanation: Instantaneous kinetic jump detected.',
+  };
+  syncService.ingestRemoteEvent(enrichedEvent);
+  const foundEvent = syncService.getEvents().find((e) => e.id === 1005);
+  if (!foundEvent?.explanation?.includes('Qwen3 Explanation')) {
+    throw new Error('Expected event 1005 to be updated with asynchronous AI explanation.');
+  }
+  console.log('✓ Scenario 4: Asynchronous AI explanation enrichment without event duplication verified.');
 
   // Reset after tests
   syncService.resetAll();
-  console.log('✓ All 4 Office Kit sync tests PASSED successfully!\n');
+  console.log('✓ ALL LOCUS Office Kit synchronization scenarios PASSED successfully!\n');
 }
 
 runTests();

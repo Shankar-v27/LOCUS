@@ -24,8 +24,9 @@ export const App: React.FC = () => {
 
   const metrics = syncService.getMetrics();
 
-  // Find the latest non-trusted incident if any
-  const latestIncident = events.find((e) => e.state === 'DENIED' || e.state === 'DEGRADED') ?? null;
+  // Find the active incident on any device currently in an incident state (DEGRADED or DENIED)
+  const activeDeviceWithIncident = devices.find((d) => d.state === 'DENIED' || d.state === 'DEGRADED');
+  const latestIncident = activeDeviceWithIncident?.latestIncident ?? null;
 
   const handleReset = () => {
     syncService.resetAll();

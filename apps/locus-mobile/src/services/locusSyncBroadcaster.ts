@@ -47,24 +47,37 @@ export async function broadcastToOfficeKit(
   telemetry?: LocusSyncPayload['telemetry'],
   customEndpoint?: string,
 ): Promise<void> {
+  const confidence =
+    typeof entry.confidence === 'number'
+      ? entry.confidence
+      : entry.state === 'TRUSTED'
+      ? 0.98
+      : entry.state === 'DENIED'
+      ? 0.15
+      : 0.65;
+
   const payload: LocusSyncPayload = {
     id: entry.id,
     deviceId: 'motorola-edge-50-fusion',
     deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
     source: 'REAL_DEVICE',
-    timestamp: entry.timestamp,
+    timestamp: entry.timestamp || Date.now(),
     state: entry.state,
-    confidence: entry.state === 'TRUSTED' ? 0.98 : entry.state === 'DENIED' ? 0.15 : 0.55,
+    confidence,
     reason: entry.reason,
     failedChecks: entry.failedChecks,
     explanation: entry.explanation,
     telemetry,
   };
 
+  console.log(`[LOCUS SYNC] transition generated: ${entry.state} (id: ${entry.id})`);
+  console.log(`[LOCUS SYNC] payload/device ID: ${payload.deviceId}`);
+
   const endpoints = customEndpoint ? [customEndpoint] : DEFAULT_OFFICE_KIT_ENDPOINTS;
 
   for (const endpoint of endpoints) {
     try {
+      console.log(`[LOCUS SYNC] POST /api/events -> ${endpoint}`);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 1200);
 
@@ -76,12 +89,12 @@ export async function broadcastToOfficeKit(
       });
 
       clearTimeout(timer);
+      console.log(`[LOCUS SYNC] POST response: ${res.status}`);
       if (res.ok) {
-        // Successfully delivered to this endpoint
         return;
       }
-    } catch {
-      // Office Kit offline on this endpoint — try next or fail silently
+    } catch (e: unknown) {
+      console.log(`[LOCUS SYNC] POST failed for ${endpoint}:`, e instanceof Error ? e.message : String(e));
     }
   }
 }

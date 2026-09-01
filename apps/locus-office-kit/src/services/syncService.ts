@@ -13,7 +13,7 @@ const SYNC_CHANNEL_NAME = 'locus_fleet_sync';
 export const INITIAL_DEVICES: LocusDevice[] = [
   {
     id: 'motorola-edge-50-fusion',
-    name: 'FIELD-UNIT-01 (Motorola Edge 50)',
+    name: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
     callsign: 'VIPER-1',
     model: 'Motorola Edge 50 Fusion (API 34)',
     source: 'REAL_DEVICE',
@@ -92,7 +92,7 @@ export const INITIAL_EVENTS: LocusIntegrityEvent[] = [
   {
     id: 101,
     deviceId: 'motorola-edge-50-fusion',
-    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50)',
+    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
     source: 'REAL_DEVICE',
     timestamp: Date.now() - 60000,
     state: 'TRUSTED',
@@ -158,6 +158,7 @@ class SyncService {
       try {
         this.sseEventSource = new EventSource('/api/stream');
         this.sseEventSource.onopen = () => {
+          console.log('[LOCUS SSE] connected to /api/stream');
           this.transportState = 'HTTP_SSE_CONNECTED';
           this.notify();
         };
@@ -165,6 +166,7 @@ class SyncService {
           try {
             const data = JSON.parse(e.data);
             if (data.type === 'LOCUS_EVENT' && data.payload) {
+              console.log('[LOCUS SSE] event received:', data.payload.deviceId, '->', data.payload.state);
               this.ingestRemoteEvent(data.payload);
             }
           } catch {
@@ -249,8 +251,8 @@ class SyncService {
       else if (d.state === 'RECOVERING') recovering++;
     }
 
-    const activeIncidents = this.events.filter(
-      (e) => (e.state === 'DENIED' || e.state === 'DEGRADED') && Date.now() - e.timestamp < 3600000,
+    const activeIncidents = this.devices.filter(
+      (d) => d.state === 'DENIED' || d.state === 'DEGRADED',
     ).length;
 
     return {
@@ -276,28 +278,48 @@ class SyncService {
     const source: DeviceSource = event.source || 'REAL_DEVICE';
     const cleanEvent: LocusIntegrityEvent = { ...event, source };
 
-    this.events = [cleanEvent, ...this.events];
+    // Avoid duplicate insertions of exact same event ID
+    const existingEventIndex = this.events.findIndex((e) => e.id === cleanEvent.id);
+    if (existingEventIndex >= 0) {
+      this.events[existingEventIndex] = cleanEvent;
+    } else {
+      this.events = [cleanEvent, ...this.events];
+    }
 
     // Find existing device or dynamically register new device
     const existingIndex = this.devices.findIndex((d) => d.id === cleanEvent.deviceId);
     if (existingIndex >= 0) {
       const dev = this.devices[existingIndex];
+      const isIntegrityState =
+        cleanEvent.state === 'TRUSTED' ||
+        cleanEvent.state === 'DEGRADED' ||
+        cleanEvent.state === 'DENIED' ||
+        cleanEvent.state === 'RECOVERING';
+      const nextState = isIntegrityState ? cleanEvent.state : dev.state;
+      const nextIncident =
+        cleanEvent.state === 'DENIED' || cleanEvent.state === 'DEGRADED'
+          ? cleanEvent
+          : cleanEvent.state === 'TRUSTED'
+          ? undefined
+          : dev.latestIncident;
+
       const updated: LocusDevice = {
         ...dev,
         name: cleanEvent.deviceName || dev.name,
         source: cleanEvent.source || dev.source,
-        state: cleanEvent.state,
-        confidence: cleanEvent.confidence,
-        lastSeen: cleanEvent.timestamp,
+        state: nextState,
+        confidence: typeof cleanEvent.confidence === 'number' ? cleanEvent.confidence : dev.confidence,
+        lastSeen: cleanEvent.timestamp || Date.now(),
         syncStatus: 'ONLINE',
         latestTelemetry: cleanEvent.telemetry ?? dev.latestTelemetry,
-        latestIncident: cleanEvent.state !== 'TRUSTED' ? cleanEvent : dev.latestIncident,
+        latestIncident: nextIncident,
       };
       this.devices = [
         ...this.devices.slice(0, existingIndex),
         updated,
         ...this.devices.slice(existingIndex + 1),
       ];
+      console.log(`[LOCUS FLEET] node updated: ${dev.id} -> ${nextState} (confidence: ${updated.confidence})`);
     } else {
       const newDev: LocusDevice = {
         id: cleanEvent.deviceId,
@@ -305,16 +327,18 @@ class SyncService {
         callsign: `NODE-${cleanEvent.deviceId.slice(-4).toUpperCase()}`,
         model: 'LOCUS Field Unit',
         source,
-        state: cleanEvent.state,
-        confidence: cleanEvent.confidence,
-        lastSeen: cleanEvent.timestamp,
+        state: cleanEvent.state === 'NETWORK' ? 'TRUSTED' : cleanEvent.state,
+        confidence: cleanEvent.confidence ?? 0.98,
+        lastSeen: cleanEvent.timestamp || Date.now(),
         syncStatus: 'ONLINE',
         batteryPct: 100,
         aiReady: true,
         latestTelemetry: cleanEvent.telemetry,
-        latestIncident: cleanEvent.state !== 'TRUSTED' ? cleanEvent : undefined,
+        latestIncident:
+          cleanEvent.state === 'DENIED' || cleanEvent.state === 'DEGRADED' ? cleanEvent : undefined,
       };
       this.devices = [newDev, ...this.devices];
+      console.log(`[LOCUS FLEET] new node registered: ${newDev.id} -> ${newDev.state}`);
     }
 
     this.notify();

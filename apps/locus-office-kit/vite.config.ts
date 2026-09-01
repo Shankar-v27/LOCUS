@@ -62,6 +62,10 @@ function locusSyncApiPlugin(): Plugin {
                 payload.source = 'REAL_DEVICE';
               }
 
+              console.log(
+                `[LOCUS SERVER] event received: device=${payload.deviceId}, state=${payload.state}, confidence=${payload.confidence}, reason=${payload.reason}`,
+              );
+
               // Broadcast to all connected SSE browser clients
               const sseMessage = `data: ${JSON.stringify({ type: 'LOCUS_EVENT', payload })}\n\n`;
               for (const client of sseClients) {
@@ -72,9 +76,12 @@ function locusSyncApiPlugin(): Plugin {
                 }
               }
 
+              console.log(`[LOCUS SERVER] SSE broadcast to ${sseClients.size} client(s)`);
+
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ ok: true, id: payload.id, clientsNotified: sseClients.size }));
             } catch (err: unknown) {
+              console.error('[LOCUS SERVER] Error processing /api/events:', err);
               res.writeHead(400, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ ok: false, error: String(err) }));
             }

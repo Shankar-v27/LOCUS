@@ -66,6 +66,7 @@ export interface EventLogEntry {
   timestamp: number;
   /** Machine state — or 'NETWORK' for network-layer recorder rows. */
   state: IntegrityState | 'NETWORK';
+  confidence?: number;
   reason: string;
   failedChecks: CheckId[];
   /** Plain-language explanation from the on-device Qwen3 model when it resolves. */
@@ -232,16 +233,40 @@ export function useAnchorPipeline() {
       const id = (eventIdRef.current += 1);
       const entry: EventLogEntry = {
         id,
-        timestamp: v.timestamp,
+        timestamp: v.timestamp || Date.now(),
         state: v.state,
+        confidence: v.confidence,
         reason: v.reason,
         failedChecks: v.failedChecks,
         explanation: null,
         embedding: null,
       };
       setEvents((prev) => [entry, ...prev]);
+
+      const lastFix = fixesRef.current[fixesRef.current.length - 1];
+      const lastEpoch = gnssRef.current[gnssRef.current.length - 1];
+      const lastBaro = baroRef.current[baroRef.current.length - 1];
+      const telemSnapshot = lastFix
+        ? {
+            latitude: lastFix.latitude,
+            longitude: lastFix.longitude,
+            altitudeMeters: lastFix.altitude,
+            speedMps: lastFix.speed,
+            headingDeg: lastFix.bearing,
+            satellites: lastEpoch ? lastEpoch.satellites.length : 0,
+            cn0Mean:
+              lastEpoch && lastEpoch.satellites.length > 0
+                ? lastEpoch.satellites.reduce((sum, s) => sum + s.cn0DbHz, 0) /
+                  lastEpoch.satellites.length
+                : 0,
+            hdop: Number.isFinite(lastFix.accuracy) ? lastFix.accuracy / 5 : 1.0,
+            baroPressureHpa: lastBaro ? lastBaro.pressureHpa : undefined,
+            isVpnActive: vpnActiveRef.current ?? false,
+          }
+        : undefined;
+
       // Non-blocking observer: export event to Office Kit if reachable
-      broadcastToOfficeKit(entry).catch(() => {});
+      broadcastToOfficeKit(entry, telemSnapshot).catch(() => {});
       // REAL on-device advisory enrichment (Qwen3 0.6B + mpnet embeddings),
       // latency-capped by the SDK watchdog. The UI shows the deterministic
       // reason until the model produces text.
@@ -251,7 +276,7 @@ export function useAnchorPipeline() {
           if (generationRef.current !== gen) return;
           const enriched = { ...entry, explanation };
           setEvents((prev) => prev.map((e) => (e.id === id ? enriched : e)));
-          broadcastToOfficeKit(enriched).catch(() => {});
+          broadcastToOfficeKit(enriched, telemSnapshot).catch(() => {});
         })
         .catch(() => {
           if (generationRef.current !== gen) return;

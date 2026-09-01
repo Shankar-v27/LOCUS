@@ -53,13 +53,13 @@ Explain in 1-2 plain-language sentences what is happening with the position data
 export function stripThinking(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 }
+
 /**
- * Hard latency budget for one advisory. The library exposes no
- * maxNewTokens (the .pte metadata owns it), so the budget is enforced by
- * interrupting generation: the generate() promise then resolves with the
- * partial text produced so far — real model output, bounded wall time.
+ * Latency budget for on-device advisory generation.
+ * Bound is set to 6000 ms to give mobile CPUs (e.g. Snapdragon 7s Gen 2)
+ * sufficient budget for prompt prefill + 2-sentence decode without early interruption.
  */
-export const ADVISORY_LATENCY_BUDGET_MS = 280;
+export const ADVISORY_LATENCY_BUDGET_MS = 6000;
 
 /**
  * Explains a verdict in plain language using the on-device LLM
@@ -86,7 +86,11 @@ export async function explainVerdict(verdict: Verdict): Promise<string> {
   }, ADVISORY_LATENCY_BUDGET_MS);
   try {
     const response = await llm.generate(buildExplanationPrompt(verdict));
-    return stripThinking(response);
+    const cleaned = stripThinking(response);
+    if (!cleaned || cleaned.trim().length === 0) {
+      throw new Error('LLM returned empty explanation');
+    }
+    return cleaned;
   } finally {
     clearTimeout(watchdog);
   }
