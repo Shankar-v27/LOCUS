@@ -95,12 +95,40 @@ describe('temporalCheck', () => {
     expect(headingCheck(temporalFrozen).passed).toBe(true);
   });
 
-  it('flags quantized replay when intervals are exactly periodic', () => {
+  it('passes normal 1 Hz periodic GPS fixes without false quantization failure', () => {
     const base = { ...cleanDrive, fixes: cleanDrive.fixes.slice(0, 30) };
     const fixes = base.fixes.map((fix, i) => ({ ...fix, timestamp: 1782072000000 + i * 1000 }));
     const result = temporalCheck({ ...base, fixes });
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1);
+    expect(result.detail).toMatch(/all 29 intervals monotonic and valid/);
+  });
+
+  it('passes on startup with insufficient (< 2) fixes', () => {
+    const result = temporalCheck({ ...cleanDrive, fixes: [cleanDrive.fixes[0]] });
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1);
+    expect(result.detail).toMatch(/insufficient fixes/);
+  });
+
+  it('fails backwards time jump', () => {
+    const fixes = [
+      { ...cleanDrive.fixes[0], timestamp: 1782072005000 },
+      { ...cleanDrive.fixes[1], timestamp: 1782072002000 },
+    ];
+    const result = temporalCheck({ ...cleanDrive, fixes });
     expect(result.passed).toBe(false);
-    expect(result.detail).toMatch(/quantized/);
+    expect(result.detail).toMatch(/backwards timestamp/);
+  });
+
+  it('fails excessive forward time gap (> 300s)', () => {
+    const fixes = [
+      { ...cleanDrive.fixes[0], timestamp: 1782072000000 },
+      { ...cleanDrive.fixes[1], timestamp: 1782072350000 },
+    ];
+    const result = temporalCheck({ ...cleanDrive, fixes });
+    expect(result.passed).toBe(false);
+    expect(result.detail).toMatch(/gap\(s\) > 300s/);
   });
 });
 

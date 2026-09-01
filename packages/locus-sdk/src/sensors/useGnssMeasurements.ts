@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import AnchorGnss, {
   type AnchorGnssStatus,
 } from '../gnss/AnchorGnssModule';
@@ -15,7 +16,7 @@ export interface GnssMeasurementsStream {
 }
 
 /**
- * Streams raw GNSS C/N0 measurement epochs from the AnchorGnss native module
+ * Streams raw GNSS C/N0 measurement epochs from the AnchorGnss / LocusGnss native module
  * and retains the last `historyLength` epochs in a ring buffer (default 600,
  * ~10 minutes at 1 Hz).
  *
@@ -30,6 +31,7 @@ export function useGnssMeasurements(historyLength = 600): GnssMeasurementsStream
   const [status, setStatus] = useState<AnchorGnssStatus | null>(null);
   const [supported, setSupported] = useState<boolean | null>(null);
   const bufferRef = useRef(new RingBuffer<GnssMeasurementSample>(historyLength));
+  const startedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,6 +52,8 @@ export function useGnssMeasurements(historyLength = 600): GnssMeasurementsStream
       bufferRef.current.push(sample);
       setLatest(sample);
       setHistory(bufferRef.current.toArray());
+      // Active measurement stream clears any transient start errors
+      setError(null);
     });
 
     const errorSubscription = AnchorGnss.addListener('onError', (event) => {
@@ -62,21 +66,39 @@ export function useGnssMeasurements(historyLength = 600): GnssMeasurementsStream
       setStatus(event.status);
     });
 
-    (async () => {
-      const isSupported = AnchorGnss.isSupported();
-      if (cancelled) return;
-      setSupported(isSupported);
-      if (!isSupported) {
-        setError('E_UNSUPPORTED: Raw GNSS measurements require Android 7.0 (API 24)+ with a LocationManager.');
-        return;
+    const startStreaming = async () => {
+      try {
+        const isSupported = AnchorGnss.isSupported();
+        if (cancelled) return;
+        setSupported(isSupported);
+        if (!isSupported) {
+          setError('E_UNSUPPORTED: Raw GNSS measurements require Android 7.0 (API 24)+ with a LocationManager.');
+          return;
+        }
+        await AnchorGnss.start();
+        startedRef.current = true;
+        if (!cancelled) {
+          setError(null);
+        }
+      } catch (e: unknown) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
       }
-      await AnchorGnss.start();
-    })().catch((e: unknown) => {
-      if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+    };
+
+    void startStreaming();
+
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      if (!startedRef.current) {
+        void startStreaming();
+      }
     });
 
     return () => {
       cancelled = true;
+      appStateSubscription.remove();
       measurementSubscription.remove();
       errorSubscription.remove();
       statusSubscription.remove();

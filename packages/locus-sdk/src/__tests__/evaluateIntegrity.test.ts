@@ -194,4 +194,42 @@ describe('stepIntegrity (debounce-counted state machine)', () => {
   it('clamps into [0, 1]', () => {
     expect(confidenceOf([])).toBe(0);
   });
+
+  it('keeps TRUSTED during startup with 60 IMU, 0 BARO, 0 GNSS, and initial GPS fixes', () => {
+    const startupWindow: SensorWindow = {
+      fixes: [
+        {
+          latitude: 37.7749,
+          longitude: -122.4194,
+          altitude: 15,
+          accuracy: 5,
+          speed: 0,
+          bearing: 0,
+          timestamp: 1725170000000,
+        },
+        {
+          latitude: 37.7749,
+          longitude: -122.4194,
+          altitude: 15,
+          accuracy: 5,
+          speed: 0,
+          bearing: 0,
+          timestamp: 1725170001000,
+        },
+      ],
+      imu: Array.from({ length: 60 }, (_, i) => ({
+        headingDeg: 90,
+        gyroRadSec: { x: 0, y: 0, z: 0 },
+        timestamp: 1725170000000 + i * 16,
+      })),
+      baro: [],
+      gnss: [],
+    };
+
+    const { verdict } = stepIntegrity(startupWindow);
+    expect(verdict.state).toBe('TRUSTED');
+    expect(verdict.failedChecks).toEqual([]);
+    expect(verdict.confidence).toBeGreaterThan(0.95);
+    expect(verdict.reason).toBe('all checks passed');
+  });
 });

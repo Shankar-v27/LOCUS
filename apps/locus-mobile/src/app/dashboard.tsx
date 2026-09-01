@@ -299,8 +299,25 @@ export default function DashboardScreen() {
                     {telemetry.baroHpa === null && !pipeline.baroError ? ' N/A' : pipeline.baroError ? '✗' : '✓'}
                   </Text>
                   {' · '}
-                  <Text style={pipeline.gnssSupported === false ? styles.telMuted : pipeline.gnssError ? styles.telFail : styles.telOk}>
-                    GNSS{pipeline.gnssSupported === false ? 'N/A' : pipeline.gnssError ? '✗' : '✓'}
+                  <Text
+                    style={
+                      pipeline.gnssSupported === false
+                        ? styles.telMuted
+                        : pipeline.gnssError
+                        ? styles.telFail
+                        : telemetry.gnssEpochs === 0
+                        ? styles.telMuted
+                        : styles.telOk
+                    }
+                  >
+                    GNSS
+                    {pipeline.gnssSupported === false
+                      ? ' N/A'
+                      : pipeline.gnssError
+                      ? '✗'
+                      : telemetry.gnssEpochs === 0
+                      ? ' …'
+                      : '✓'}
                   </Text>
                 </Text>
               </View>
