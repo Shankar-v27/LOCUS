@@ -278,9 +278,11 @@ class SyncService {
     const source: DeviceSource = event.source || 'REAL_DEVICE';
     const cleanEvent: LocusIntegrityEvent = { ...event, source };
 
-    // Avoid duplicate insertions of exact same event ID
+    // Check if this is an asynchronous enrichment of a previously logged event (e.g. Qwen explanation resolving)
     const existingEventIndex = this.events.findIndex((e) => e.id === cleanEvent.id);
-    if (existingEventIndex >= 0) {
+    const isEnrichmentUpdate = existingEventIndex >= 0;
+
+    if (isEnrichmentUpdate) {
       this.events[existingEventIndex] = cleanEvent;
     } else {
       this.events = [cleanEvent, ...this.events];
@@ -290,6 +292,31 @@ class SyncService {
     const existingIndex = this.devices.findIndex((d) => d.id === cleanEvent.deviceId);
     if (existingIndex >= 0) {
       const dev = this.devices[existingIndex];
+
+      // If this is purely an enrichment update for an older event, update the incident reference if it matches,
+      // but DO NOT roll back the active device state to an old event's state!
+      if (isEnrichmentUpdate) {
+        let updatedIncident = dev.latestIncident;
+        if (dev.latestIncident?.id === cleanEvent.id) {
+          updatedIncident = cleanEvent;
+        }
+        this.devices[existingIndex] = {
+          ...dev,
+          latestIncident: updatedIncident,
+        };
+        console.log(`[LOCUS FLEET] event #${cleanEvent.id} enriched with AI explanation for ${dev.id}`);
+        this.notify();
+        return;
+      }
+
+      // Check if event is fresh (ignore out-of-order stale network arrivals older than dev.lastSeen)
+      const eventTs = cleanEvent.timestamp || Date.now();
+      if (eventTs < dev.lastSeen - 500) {
+        console.log(`[LOCUS FLEET] ignored stale out-of-order state update for ${dev.id}`);
+        this.notify();
+        return;
+      }
+
       const isIntegrityState =
         cleanEvent.state === 'TRUSTED' ||
         cleanEvent.state === 'DEGRADED' ||
@@ -309,7 +336,7 @@ class SyncService {
         source: cleanEvent.source || dev.source,
         state: nextState,
         confidence: typeof cleanEvent.confidence === 'number' ? cleanEvent.confidence : dev.confidence,
-        lastSeen: cleanEvent.timestamp || Date.now(),
+        lastSeen: eventTs,
         syncStatus: 'ONLINE',
         latestTelemetry: cleanEvent.telemetry ?? dev.latestTelemetry,
         latestIncident: nextIncident,
