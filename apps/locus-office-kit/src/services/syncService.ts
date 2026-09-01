@@ -19,8 +19,7 @@ export const INITIAL_DEVICES: LocusDevice[] = [
     source: 'REAL_DEVICE',
     state: 'TRUSTED',
     confidence: 0.98,
-    lastSeen: Date.now() - 60000,
-    latestStateEventId: 101,
+    lastSeen: 0,
     syncStatus: 'ONLINE',
     batteryPct: 87,
     aiReady: true,
@@ -45,7 +44,7 @@ export const INITIAL_DEVICES: LocusDevice[] = [
     source: 'SIMULATED',
     state: 'TRUSTED',
     confidence: 0.95,
-    lastSeen: Date.now() - 4000,
+    lastSeen: 0,
     syncStatus: 'ONLINE',
     batteryPct: 62,
     aiReady: true,
@@ -70,7 +69,7 @@ export const INITIAL_DEVICES: LocusDevice[] = [
     source: 'SIMULATED',
     state: 'TRUSTED',
     confidence: 0.92,
-    lastSeen: Date.now() - 9000,
+    lastSeen: 0,
     syncStatus: 'STANDBY',
     batteryPct: 94,
     aiReady: true,
@@ -91,7 +90,7 @@ export const INITIAL_DEVICES: LocusDevice[] = [
 
 export const INITIAL_EVENTS: LocusIntegrityEvent[] = [
   {
-    id: 101,
+    id: 'init-real-1',
     deviceId: 'motorola-edge-50-fusion',
     deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
     source: 'REAL_DEVICE',
@@ -105,7 +104,7 @@ export const INITIAL_EVENTS: LocusIntegrityEvent[] = [
     telemetry: INITIAL_DEVICES[0].latestTelemetry,
   },
   {
-    id: 100,
+    id: 'init-sim-1',
     deviceId: 'drone-alpha-sim',
     deviceName: 'DRONE-ALPHA (Autonomous UAV)',
     source: 'SIMULATED',
@@ -175,9 +174,14 @@ class SyncService {
           }
         };
         this.sseEventSource.onerror = () => {
-          // If SSE fails (e.g. running in production static mode), fallback gracefully to BROWSER_LOCAL
+          // If SSE fails or restarts, fallback to BROWSER_LOCAL and schedule reconnect
           this.transportState = 'BROWSER_LOCAL';
           this.notify();
+          if (this.sseEventSource) {
+            this.sseEventSource.close();
+            this.sseEventSource = null;
+            setTimeout(() => this.initSseStream(), 1500);
+          }
         };
       } catch {
         this.transportState = 'BROWSER_LOCAL';
@@ -186,25 +190,18 @@ class SyncService {
   }
 
   private loadState() {
+    this.devices = JSON.parse(JSON.stringify(INITIAL_DEVICES));
+    this.events = JSON.parse(JSON.stringify(INITIAL_EVENTS));
     try {
-      const savedDevices = localStorage.getItem(STORAGE_KEY_DEVICES);
-      this.devices = savedDevices ? JSON.parse(savedDevices) : INITIAL_DEVICES;
-
-      const savedEvents = localStorage.getItem(STORAGE_KEY_EVENTS);
-      this.events = savedEvents ? JSON.parse(savedEvents) : INITIAL_EVENTS;
+      localStorage.removeItem(STORAGE_KEY_DEVICES);
+      localStorage.removeItem(STORAGE_KEY_EVENTS);
     } catch {
-      this.devices = INITIAL_DEVICES;
-      this.events = INITIAL_EVENTS;
+      // ignore
     }
   }
 
   private saveState() {
-    try {
-      localStorage.setItem(STORAGE_KEY_DEVICES, JSON.stringify(this.devices));
-      localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(this.events));
-    } catch {
-      // ignore
-    }
+    // Ephemeral in-memory store for active session; prevents stale states on browser reload
   }
 
   private notify() {
@@ -318,10 +315,15 @@ class SyncService {
 
       // Monotonic sequence verification: only accept state events with higher event IDs or newer timestamps
       const eventTs = cleanEvent.timestamp || Date.now();
-      const isMonotonic =
-        typeof cleanEvent.id === 'number' && typeof dev.latestStateEventId === 'number'
-          ? cleanEvent.id > dev.latestStateEventId
-          : eventTs >= dev.lastSeen;
+      let isMonotonic = true;
+      if (dev.latestStateEventId !== undefined) {
+        if (typeof cleanEvent.id === 'number' && typeof dev.latestStateEventId === 'number') {
+          // Accept if higher sequence ID or noticeably newer timestamp (e.g. after phone reset / reconnection)
+          isMonotonic = cleanEvent.id > dev.latestStateEventId || eventTs > dev.lastSeen + 1500;
+        } else {
+          isMonotonic = eventTs >= dev.lastSeen;
+        }
+      }
 
       if (!isMonotonic) {
         console.log(
