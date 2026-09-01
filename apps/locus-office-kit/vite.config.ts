@@ -63,7 +63,7 @@ function locusSyncApiPlugin(): Plugin {
               }
 
               console.log(
-                `[LOCUS SERVER] event received: device=${payload.deviceId}, state=${payload.state}, confidence=${payload.confidence}, reason=${payload.reason}`,
+                `[LOCUS SYNC IN] eventId=${payload.id} state=${payload.state} timestamp=${payload.timestamp} deviceId=${payload.deviceId} confidence=${payload.confidence} reason=${payload.reason} isEnrichment=${payload.isEnrichment}`,
               );
 
               // Broadcast to all connected SSE browser clients

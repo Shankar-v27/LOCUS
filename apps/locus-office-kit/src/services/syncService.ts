@@ -19,7 +19,8 @@ export const INITIAL_DEVICES: LocusDevice[] = [
     source: 'REAL_DEVICE',
     state: 'TRUSTED',
     confidence: 0.98,
-    lastSeen: Date.now(),
+    lastSeen: Date.now() - 60000,
+    latestStateEventId: 101,
     syncStatus: 'ONLINE',
     batteryPct: 87,
     aiReady: true,
@@ -280,9 +281,9 @@ class SyncService {
 
     // Check if this is an asynchronous enrichment of a previously logged event (e.g. Qwen explanation resolving)
     const existingEventIndex = this.events.findIndex((e) => e.id === cleanEvent.id);
-    const isEnrichmentUpdate = existingEventIndex >= 0;
+    const isEnrichmentUpdate = cleanEvent.isEnrichment === true || existingEventIndex >= 0;
 
-    if (isEnrichmentUpdate) {
+    if (existingEventIndex >= 0) {
       this.events[existingEventIndex] = cleanEvent;
     } else {
       this.events = [cleanEvent, ...this.events];
@@ -296,6 +297,13 @@ class SyncService {
       // If this is purely an enrichment update for an older event, update the incident reference if it matches,
       // but DO NOT roll back the active device state to an old event's state!
       if (isEnrichmentUpdate) {
+        console.log(
+          `[LOCUS AI ENRICHMENT] eventId=${cleanEvent.id} originalState=${cleanEvent.state} originalTimestamp=${cleanEvent.timestamp} newExplanation=true`,
+        );
+        console.log(
+          `[LOCUS DEVICE UPDATE] deviceId=${dev.id} incomingEventId=${cleanEvent.id} incomingState=${cleanEvent.state} incomingTimestamp=${cleanEvent.timestamp} currentState=${dev.state} currentLastSeen=${dev.lastSeen} accepted=false rejectionReason=AI_ENRICHMENT_DOES_NOT_MUTATE_DEVICE_STATE`,
+        );
+
         let updatedIncident = dev.latestIncident;
         if (dev.latestIncident?.id === cleanEvent.id) {
           updatedIncident = cleanEvent;
@@ -304,18 +312,28 @@ class SyncService {
           ...dev,
           latestIncident: updatedIncident,
         };
-        console.log(`[LOCUS FLEET] event #${cleanEvent.id} enriched with AI explanation for ${dev.id}`);
         this.notify();
         return;
       }
 
-      // Check if event is fresh (ignore out-of-order stale network arrivals older than dev.lastSeen)
+      // Monotonic sequence verification: only accept state events with higher event IDs or newer timestamps
       const eventTs = cleanEvent.timestamp || Date.now();
-      if (eventTs < dev.lastSeen - 500) {
-        console.log(`[LOCUS FLEET] ignored stale out-of-order state update for ${dev.id}`);
+      const isMonotonic =
+        typeof cleanEvent.id === 'number' && typeof dev.latestStateEventId === 'number'
+          ? cleanEvent.id > dev.latestStateEventId
+          : eventTs >= dev.lastSeen;
+
+      if (!isMonotonic) {
+        console.log(
+          `[LOCUS DEVICE UPDATE] deviceId=${dev.id} incomingEventId=${cleanEvent.id} incomingState=${cleanEvent.state} incomingTimestamp=${eventTs} currentState=${dev.state} currentLastSeen=${dev.lastSeen} accepted=false rejectionReason=STALE_OR_OUT_OF_ORDER_EVENT`,
+        );
         this.notify();
         return;
       }
+
+      console.log(
+        `[LOCUS DEVICE UPDATE] deviceId=${dev.id} incomingEventId=${cleanEvent.id} incomingState=${cleanEvent.state} incomingTimestamp=${eventTs} currentState=${dev.state} currentLastSeen=${dev.lastSeen} accepted=true rejectionReason=NONE`,
+      );
 
       const isIntegrityState =
         cleanEvent.state === 'TRUSTED' ||
@@ -337,6 +355,7 @@ class SyncService {
         state: nextState,
         confidence: typeof cleanEvent.confidence === 'number' ? cleanEvent.confidence : dev.confidence,
         lastSeen: eventTs,
+        latestStateEventId: cleanEvent.id,
         syncStatus: 'ONLINE',
         latestTelemetry: cleanEvent.telemetry ?? dev.latestTelemetry,
         latestIncident: nextIncident,
@@ -357,6 +376,7 @@ class SyncService {
         state: cleanEvent.state === 'NETWORK' ? 'TRUSTED' : cleanEvent.state,
         confidence: cleanEvent.confidence ?? 0.98,
         lastSeen: cleanEvent.timestamp || Date.now(),
+        latestStateEventId: cleanEvent.id,
         syncStatus: 'ONLINE',
         batteryPct: 100,
         aiReady: true,
@@ -487,8 +507,14 @@ class SyncService {
   }
 
   public resetAll() {
-    this.devices = INITIAL_DEVICES;
-    this.events = INITIAL_EVENTS;
+    try {
+      localStorage.removeItem(STORAGE_KEY_DEVICES);
+      localStorage.removeItem(STORAGE_KEY_EVENTS);
+    } catch {
+      // ignore
+    }
+    this.devices = JSON.parse(JSON.stringify(INITIAL_DEVICES));
+    this.events = JSON.parse(JSON.stringify(INITIAL_EVENTS));
     this.notify();
   }
 }

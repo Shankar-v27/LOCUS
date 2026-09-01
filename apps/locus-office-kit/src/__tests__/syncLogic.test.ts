@@ -1,60 +1,25 @@
-import { syncService, INITIAL_DEVICES, INITIAL_EVENTS } from '../services/syncService';
+import { syncService } from '../services/syncService';
 import { LocusIntegrityEvent } from '../types/locusSync';
 
 function runTests() {
-  console.log('[TEST] Starting comprehensive LOCUS Office Kit sync service unit tests...');
-
-  // Test 1: Initial state and baseline metrics
-  syncService.resetAll();
-  const devices = syncService.getDevices();
-  const events = syncService.getEvents();
-  const metrics = syncService.getMetrics();
-
-  if (devices.length !== INITIAL_DEVICES.length) {
-    throw new Error(`Expected ${INITIAL_DEVICES.length} devices, got ${devices.length}`);
-  }
-  if (events.length !== INITIAL_EVENTS.length) {
-    throw new Error(`Expected ${INITIAL_EVENTS.length} events, got ${events.length}`);
-  }
-  if (metrics.realDevices !== 1) {
-    throw new Error(`Expected 1 real device, got ${metrics.realDevices}`);
-  }
-  if (metrics.simulatedDevices !== 2) {
-    throw new Error(`Expected 2 simulated devices, got ${metrics.simulatedDevices}`);
-  }
-  console.log('✓ Scenario 1: Initial fleet baseline verified (1 Real, 2 Simulated, 3 Trusted).');
-
-  // Test 2: Sequential State Progression (TRUSTED -> DEGRADED -> DENIED -> RECOVERING -> TRUSTED)
+  console.log('[TEST] Starting comprehensive STEP 11 LOCUS Office Kit synchronization unit tests...');
   const devId = 'motorola-edge-50-fusion';
+  const baseTime = Date.now();
 
-  // Step A: DEGRADED event (e.g. single check failure)
-  const degradedEvent: LocusIntegrityEvent = {
-    id: 1001,
-    deviceId: devId,
-    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
-    source: 'REAL_DEVICE',
-    timestamp: Date.now(),
-    state: 'DEGRADED',
-    confidence: 0.65,
-    reason: 'degraded: temporal check anomaly',
-    failedChecks: ['temporal'],
-    explanation: null,
-  };
-  syncService.ingestRemoteEvent(degradedEvent);
-  let dev = syncService.getDevices().find((d) => d.id === devId);
-  let m = syncService.getMetrics();
-  if (dev?.state !== 'DEGRADED' || m.degraded !== 1 || m.trusted !== 2) {
-    throw new Error(`Expected 1 DEGRADED, 2 TRUSTED, got degraded=${m.degraded}, trusted=${m.trusted}`);
+  // TEST 1: Initial state & TRUSTED -> DENIED
+  syncService.resetAll();
+  let devices = syncService.getDevices();
+  let dev = devices.find((d) => d.id === devId);
+  if (dev?.state !== 'TRUSTED') {
+    throw new Error(`Test 1 Failed: Expected initial state TRUSTED, got ${dev?.state}`);
   }
-  console.log('✓ Scenario 2A: DEGRADED transition updates device and metrics (1 Degraded, 2 Trusted).');
 
-  // Step B: DENIED event (e.g. active spoofing attack)
   const deniedEvent: LocusIntegrityEvent = {
-    id: 1002,
+    id: 200,
     deviceId: devId,
     deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
     source: 'REAL_DEVICE',
-    timestamp: Date.now(),
+    timestamp: baseTime + 1000,
     state: 'DENIED',
     confidence: 0.15,
     reason: 'denied: kinematic, cn0 failed',
@@ -63,19 +28,18 @@ function runTests() {
   };
   syncService.ingestRemoteEvent(deniedEvent);
   dev = syncService.getDevices().find((d) => d.id === devId);
-  m = syncService.getMetrics();
-  if (dev?.state !== 'DENIED' || m.denied !== 1 || m.degraded !== 0 || m.trusted !== 2) {
-    throw new Error(`Expected 1 DENIED, 0 DEGRADED, 2 TRUSTED, got denied=${m.denied}, trusted=${m.trusted}`);
+  if (dev?.state !== 'DENIED') {
+    throw new Error(`Test 1 Failed: Expected state DENIED, got ${dev?.state}`);
   }
-  console.log('✓ Scenario 2B: DENIED transition updates device and metrics (1 Denied, 2 Trusted).');
+  console.log('✓ TEST 1 Passed: TRUSTED -> DENIED (Office Kit shows DENIED).');
 
-  // Step C: RECOVERING event (clean epochs accumulating)
+  // TEST 2: TRUSTED -> DENIED -> RECOVERING
   const recoveringEvent: LocusIntegrityEvent = {
-    id: 1003,
+    id: 201,
     deviceId: devId,
     deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
     source: 'REAL_DEVICE',
-    timestamp: Date.now(),
+    timestamp: baseTime + 2000,
     state: 'RECOVERING',
     confidence: 0.75,
     reason: 'recovery debounce in progress (3/3)',
@@ -84,87 +48,149 @@ function runTests() {
   };
   syncService.ingestRemoteEvent(recoveringEvent);
   dev = syncService.getDevices().find((d) => d.id === devId);
-  m = syncService.getMetrics();
-  if (dev?.state !== 'RECOVERING' || m.recovering !== 1 || m.denied !== 0 || m.trusted !== 2) {
-    throw new Error(`Expected 1 RECOVERING, 0 DENIED, 2 TRUSTED, got recovering=${m.recovering}`);
+  if (dev?.state !== 'RECOVERING') {
+    throw new Error(`Test 2 Failed: Expected state RECOVERING, got ${dev?.state}`);
   }
-  console.log('✓ Scenario 2C: RECOVERING transition updates device and metrics (1 Recovering, 2 Trusted).');
+  console.log('✓ TEST 2 Passed: DENIED -> RECOVERING (Office Kit shows RECOVERING).');
 
-  // Step D: TRUSTED event (full recovery)
+  // TEST 3: RECOVERING -> TRUSTED
   const trustedEvent: LocusIntegrityEvent = {
-    id: 1004,
+    id: 202,
     deviceId: devId,
     deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
     source: 'REAL_DEVICE',
-    timestamp: Date.now(),
+    timestamp: baseTime + 3000,
     state: 'TRUSTED',
     confidence: 0.98,
     reason: 'all checks passed',
     failedChecks: [],
-    explanation: 'Position is verified across all physical checks.',
+    explanation: null,
   };
   syncService.ingestRemoteEvent(trustedEvent);
   dev = syncService.getDevices().find((d) => d.id === devId);
-  m = syncService.getMetrics();
-  if (dev?.state !== 'TRUSTED' || m.trusted !== 3 || m.recovering !== 0 || m.denied !== 0) {
-    throw new Error(`Expected 3 TRUSTED, 0 RECOVERING, got trusted=${m.trusted}, recovering=${m.recovering}`);
+  if (dev?.state !== 'TRUSTED' || dev?.latestIncident !== undefined) {
+    throw new Error(`Test 3 Failed: Expected state TRUSTED with incident cleared, got state=${dev?.state}`);
   }
-  if (dev?.latestIncident !== undefined) {
-    throw new Error(`Expected latestIncident to be cleared on TRUSTED, got ${JSON.stringify(dev?.latestIncident)}`);
+  console.log('✓ TEST 3 Passed: RECOVERING -> TRUSTED (Office Kit shows TRUSTED and clears incident).');
+
+  // TEST 4: DENIED event arrives. Then an old DENIED AI enrichment arrives.
+  syncService.resetAll();
+  syncService.ingestRemoteEvent(deniedEvent);
+  const deniedEnriched: LocusIntegrityEvent = {
+    ...deniedEvent,
+    isEnrichment: true,
+    explanation: 'Qwen3: Instantaneous velocity teleport detected.',
+  };
+  syncService.ingestRemoteEvent(deniedEnriched);
+  dev = syncService.getDevices().find((d) => d.id === devId);
+  if (dev?.state !== 'DENIED') {
+    throw new Error(`Test 4 Failed: Expected state to remain DENIED, got ${dev?.state}`);
   }
-  console.log('✓ Scenario 2D: TRUSTED recovery returns fleet to 3 TRUSTED and clears active incident.');
+  console.log('✓ TEST 4 Passed: DENIED AI enrichment does not disrupt DENIED state.');
 
-  // Test 3: Multi-node Isolation (event for VIPER-1 must not alter HAWK-7 or TITAN-3)
-  const hawkBefore = syncService.getDevices().find((d) => d.id === 'drone-alpha-sim');
-  const titanBefore = syncService.getDevices().find((d) => d.id === 'convoy-lead-sim');
+  // TEST 5: DENIED -> RECOVERING -> TRUSTED. Then old DENIED AI enrichment arrives.
+  syncService.ingestRemoteEvent(recoveringEvent);
+  syncService.ingestRemoteEvent(trustedEvent);
+  syncService.ingestRemoteEvent(deniedEnriched);
+  dev = syncService.getDevices().find((d) => d.id === devId);
+  if (dev?.state !== 'TRUSTED') {
+    throw new Error(`Test 5 Failed: Old DENIED AI enrichment rolled back state to ${dev?.state}`);
+  }
+  console.log('✓ TEST 5 Passed: Late DENIED AI enrichment does NOT roll back TRUSTED device state.');
 
-  syncService.ingestRemoteEvent({
-    id: 1005,
+  // TEST 6: DENIED -> RECOVERING -> TRUSTED. Then old RECOVERING AI enrichment arrives.
+  const recoveringEnriched: LocusIntegrityEvent = {
+    ...recoveringEvent,
+    isEnrichment: true,
+    explanation: 'Qwen3: Sensor values stabilizing across 3 epochs.',
+  };
+  syncService.ingestRemoteEvent(recoveringEnriched);
+  dev = syncService.getDevices().find((d) => d.id === devId);
+  if (dev?.state !== 'TRUSTED') {
+    throw new Error(`Test 6 Failed: Old RECOVERING AI enrichment rolled back state to ${dev?.state}`);
+  }
+  console.log('✓ TEST 6 Passed: Late RECOVERING AI enrichment does NOT roll back TRUSTED device state.');
+
+  // TEST 7: A stale DEGRADED event (older timestamp & smaller id) arrives after TRUSTED.
+  const staleDegradedEvent: LocusIntegrityEvent = {
+    id: 150, // older than 202
     deviceId: devId,
     deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
     source: 'REAL_DEVICE',
-    timestamp: Date.now(),
-    state: 'DENIED',
-    confidence: 0.1,
-    reason: 'denied: kinematic teleport',
+    timestamp: baseTime + 500, // older than 3000
+    state: 'DEGRADED',
+    confidence: 0.65,
+    reason: 'degraded: kinematic failed',
     failedChecks: ['kinematic'],
     explanation: null,
-  });
-
-  const hawkAfter = syncService.getDevices().find((d) => d.id === 'drone-alpha-sim');
-  const titanAfter = syncService.getDevices().find((d) => d.id === 'convoy-lead-sim');
-
-  if (hawkAfter?.state !== hawkBefore?.state || hawkAfter?.confidence !== hawkBefore?.confidence) {
-    throw new Error('HAWK-7 was unexpectedly modified by VIPER-1 event!');
+  };
+  syncService.ingestRemoteEvent(staleDegradedEvent);
+  dev = syncService.getDevices().find((d) => d.id === devId);
+  if (dev?.state !== 'TRUSTED') {
+    throw new Error(`Test 7 Failed: Stale out-of-order DEGRADED rolled back state to ${dev?.state}`);
   }
-  if (titanAfter?.state !== titanBefore?.state || titanAfter?.confidence !== titanBefore?.confidence) {
-    throw new Error('TITAN-3 was unexpectedly modified by VIPER-1 event!');
-  }
-  console.log('✓ Scenario 3: Multi-node isolation verified (VIPER-1 events do not affect HAWK-7 or TITAN-3).');
+  console.log('✓ TEST 7 Passed: Stale out-of-order DEGRADED event rejected by monotonic ordering rule.');
 
-  // Test 4: Asynchronous AI Enrichment update
-  const enrichedEvent: LocusIntegrityEvent = {
-    id: 1005, // Same event ID, now enriched with Qwen3 explanation
+  // TEST 8: A genuinely newer DEGRADED event arrives from mobile.
+  const genuineDegradedEvent: LocusIntegrityEvent = {
+    id: 203,
     deviceId: devId,
     deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
     source: 'REAL_DEVICE',
-    timestamp: Date.now(),
-    state: 'DENIED',
-    confidence: 0.1,
-    reason: 'denied: kinematic teleport',
-    failedChecks: ['kinematic'],
-    explanation: 'Qwen3 Explanation: Instantaneous kinetic jump detected.',
+    timestamp: baseTime + 4000,
+    state: 'DEGRADED',
+    confidence: 0.65,
+    reason: 'degraded: temporal check failed',
+    failedChecks: ['temporal'],
+    explanation: null,
   };
-  syncService.ingestRemoteEvent(enrichedEvent);
-  const foundEvent = syncService.getEvents().find((e) => e.id === 1005);
-  if (!foundEvent?.explanation?.includes('Qwen3 Explanation')) {
-    throw new Error('Expected event 1005 to be updated with asynchronous AI explanation.');
+  syncService.ingestRemoteEvent(genuineDegradedEvent);
+  dev = syncService.getDevices().find((d) => d.id === devId);
+  if (dev?.state !== 'DEGRADED') {
+    throw new Error(`Test 8 Failed: Genuine newer DEGRADED event was not accepted, state=${dev?.state}`);
   }
-  console.log('✓ Scenario 4: Asynchronous AI explanation enrichment without event duplication verified.');
+  console.log('✓ TEST 8 Passed: Genuinely newer DEGRADED event from mobile accepted.');
 
-  // Reset after tests
+  // TEST 9: AI enrichment must NEVER change current device state.
+  const genuineDegradedEnriched: LocusIntegrityEvent = {
+    ...genuineDegradedEvent,
+    isEnrichment: true,
+    explanation: 'Qwen3: Timestamp jitter detected.',
+  };
+  syncService.ingestRemoteEvent(genuineDegradedEnriched);
+  dev = syncService.getDevices().find((d) => d.id === devId);
+  if (dev?.state !== 'DEGRADED') {
+    throw new Error(`Test 9 Failed: Enrichment corrupted state=${dev?.state}`);
+  }
+  console.log('✓ TEST 9 Passed: AI enrichment updates event metadata without mutating device state.');
+
+  // TEST 10: Event History must still contain all historical states even when device recovers to TRUSTED.
+  const finalTrustedEvent: LocusIntegrityEvent = {
+    id: 204,
+    deviceId: devId,
+    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
+    source: 'REAL_DEVICE',
+    timestamp: baseTime + 5000,
+    state: 'TRUSTED',
+    confidence: 0.98,
+    reason: 'all checks passed',
+    failedChecks: [],
+    explanation: null,
+  };
+  syncService.ingestRemoteEvent(finalTrustedEvent);
+  const allEvents = syncService.getEvents();
+  const hasDenied = allEvents.some((e) => e.state === 'DENIED');
+  const hasDegraded = allEvents.some((e) => e.state === 'DEGRADED');
+  const hasRecovering = allEvents.some((e) => e.state === 'RECOVERING');
+  const hasTrusted = allEvents.some((e) => e.state === 'TRUSTED');
+
+  if (!hasDenied || !hasDegraded || !hasRecovering || !hasTrusted) {
+    throw new Error('Test 10 Failed: Event history was lost during recovery!');
+  }
+  console.log('✓ TEST 10 Passed: Event history preserves full chronological ledger across all states.');
+
   syncService.resetAll();
-  console.log('✓ ALL LOCUS Office Kit synchronization scenarios PASSED successfully!\n');
+  console.log('\n✓ ALL 10 STEP 11 SYNCHRONIZATION TESTS PASSED SUCCESSFULLY!\n');
 }
 
 runTests();

@@ -256,7 +256,7 @@ export function useAnchorPipeline() {
             satellites: lastEpoch ? lastEpoch.satellites.length : 0,
             cn0Mean:
               lastEpoch && lastEpoch.satellites.length > 0
-                ? lastEpoch.satellites.reduce((sum, s) => sum + s.cn0DbHz, 0) /
+                ? lastEpoch.satellites.reduce((sum, s) => sum + (s.cn0DbHz ?? 0), 0) /
                   lastEpoch.satellites.length
                 : 0,
             hdop: Number.isFinite(lastFix.accuracy) ? lastFix.accuracy / 5 : 1.0,
@@ -265,8 +265,8 @@ export function useAnchorPipeline() {
           }
         : undefined;
 
-      // Non-blocking observer: export event to Office Kit if reachable
-      broadcastToOfficeKit(entry, telemSnapshot).catch(() => {});
+      // Non-blocking observer: export event to Office Kit if reachable (initial state transition)
+      broadcastToOfficeKit(entry, telemSnapshot, false).catch(() => {});
       // REAL on-device advisory enrichment (Qwen3 0.6B + mpnet embeddings),
       // latency-capped by the SDK watchdog. The UI shows the deterministic
       // reason until the model produces text.
@@ -276,7 +276,7 @@ export function useAnchorPipeline() {
           if (generationRef.current !== gen) return;
           const enriched = { ...entry, explanation };
           setEvents((prev) => prev.map((e) => (e.id === id ? enriched : e)));
-          broadcastToOfficeKit(enriched, telemSnapshot).catch(() => {});
+          broadcastToOfficeKit(enriched, telemSnapshot, true).catch(() => {});
         })
         .catch(() => {
           if (generationRef.current !== gen) return;

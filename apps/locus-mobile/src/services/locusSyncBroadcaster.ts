@@ -19,6 +19,7 @@ export interface LocusSyncPayload {
   reason: string;
   failedChecks: string[];
   explanation: string | null;
+  isEnrichment?: boolean;
   telemetry?: {
     latitude: number;
     longitude: number;
@@ -45,6 +46,7 @@ const DEFAULT_OFFICE_KIT_ENDPOINTS = [
 export async function broadcastToOfficeKit(
   entry: EventLogEntry,
   telemetry?: LocusSyncPayload['telemetry'],
+  isEnrichment: boolean = false,
   customEndpoint?: string,
 ): Promise<void> {
   const confidence =
@@ -67,17 +69,18 @@ export async function broadcastToOfficeKit(
     reason: entry.reason,
     failedChecks: entry.failedChecks,
     explanation: entry.explanation,
+    isEnrichment,
     telemetry,
   };
 
-  console.log(`[LOCUS SYNC] transition generated: ${entry.state} (id: ${entry.id})`);
-  console.log(`[LOCUS SYNC] payload/device ID: ${payload.deviceId}`);
+  console.log(
+    `[LOCUS SYNC OUT] eventId=${payload.id} state=${payload.state} timestamp=${payload.timestamp} confidence=${payload.confidence} reason=${payload.reason} failedChecks=${payload.failedChecks.join(',')} isEnrichment=${payload.isEnrichment}`,
+  );
 
   const endpoints = customEndpoint ? [customEndpoint] : DEFAULT_OFFICE_KIT_ENDPOINTS;
 
   for (const endpoint of endpoints) {
     try {
-      console.log(`[LOCUS SYNC] POST /api/events -> ${endpoint}`);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 1200);
 
@@ -89,12 +92,11 @@ export async function broadcastToOfficeKit(
       });
 
       clearTimeout(timer);
-      console.log(`[LOCUS SYNC] POST response: ${res.status}`);
       if (res.ok) {
         return;
       }
     } catch (e: unknown) {
-      console.log(`[LOCUS SYNC] POST failed for ${endpoint}:`, e instanceof Error ? e.message : String(e));
+      // Non-blocking observer path
     }
   }
 }

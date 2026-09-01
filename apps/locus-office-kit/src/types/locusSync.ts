@@ -44,6 +44,7 @@ export interface LocusIntegrityEvent {
   embedding?: number[] | null;
   telemetry?: TelemetrySnapshot;
   checks?: CheckResultSummary[];
+  isEnrichment?: boolean;
 }
 
 export interface LocusDevice {
@@ -55,6 +56,7 @@ export interface LocusDevice {
   state: LocusIntegrityState;
   confidence: number;
   lastSeen: number;
+  latestStateEventId?: number | string;
   syncStatus: 'ONLINE' | 'STANDBY' | 'OFFLINE';
   batteryPct: number;
   aiReady: boolean;
