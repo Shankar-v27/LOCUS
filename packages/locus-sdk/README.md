@@ -24,7 +24,7 @@ npm install locus-sdk
 
 The package is an Expo module (autolinked). The app **must use
 [expo-dev-client](https://docs.expo.dev/versions/latest/sdk/dev-client/) or a
-bare workflow build** — the native `AnchorGnss` module is compiled by the EAS
+bare workflow build** — the native `LocusGnss` module is compiled by the EAS
 cloud builder into your dev client / production build; it will not work inside
 Expo Go.
 
@@ -58,12 +58,12 @@ const { sample: baro } = useBarometerStream();
 const { history: gnss } = useGnssMeasurements(30);
 
 // On each fix, push the newest samples into rolling buffers and evaluate:
-const verdict = anchor.evaluate({ fixes, imu: imuSamples, baro: baroSamples, gnss });
+const verdict = locus.evaluate({ fixes, imu: imuSamples, baro: baroSamples, gnss });
 
 console.log(verdict.state, verdict.reason, verdict.confidence);
 
 // 4. Explain the verdict on demand (never mutates state):
-const sentence = await anchor.explain(verdict);
+const sentence = await locus.explain(verdict);
 ```
 
 Permissions are **not** requested by the SDK. The app must obtain
@@ -88,7 +88,7 @@ transitions:
 | `RECOVERING`, next clean evaluation | `TRUSTED` |
 | `RECOVERING`, failing evaluation | `DENIED` (regression, debounce restarts) |
 
-`createAnchorSDK().evaluate()` owns the debounce counter internally; the
+`createLocusSDK().evaluate()` owns the debounce counter internally; the
 optional `prevState` argument seeds the first call only.
 
 `confidence` is the weighted sum of check scores: kinematic 0.25, cn0 0.25,
@@ -120,9 +120,9 @@ runtime by the library — never bundled):
 
 Guarantees:
 
-- **No model loads at startup.** Models load lazily on first use; `AnchorProvider`
+- **No model loads at startup.** Models load lazily on first use; `LocusProvider`
   pre-warms them in the background (same shared instances).
-- **AI never touches state.** `AnchorSDK` exposes no mutation path —
+- **AI never touches state.** `LocusSDK` exposes no mutation path —
   `explain` strictly maps `Verdict → Promise<string>`.
 - Deviations from the original model plan: the embedding model shipped by the
   registry is `all_mpnet_base_v2` (`multi-qa-mpnet-base-v2` is not in the
@@ -133,10 +133,10 @@ Guarantees:
 
 ## API reference
 
-### `createAnchorSDK(): AnchorSDK`
+### `createLocusSDK(): LocusSDK`
 
 ```ts
-interface AnchorSDK {
+interface LocusSDK {
   evaluate(window: SensorWindow, prevState?: IntegrityState): Verdict;
   explain(verdict: Verdict): Promise<string>;
   transcribe(audio: Float32Array): Promise<string>; // 16 kHz mono PCM
@@ -173,9 +173,9 @@ Nullability policy for `Fix` fields (expo-location may report null): altitude �
 0, accuracy → `+Infinity`, speed → 0, bearing → 0. Unknown accuracy never
 artificially passes the kinematic envelope; the environmental gate fails it.
 
-### AnchorGnss native module (raw C/N0)
+### LocusGnss native module (raw C/N0)
 
-`useGnssMeasurements` wraps the native `AnchorGnss` module (Expo Modules API,
+`useGnssMeasurements` wraps the native `LocusGnss` module (Expo Modules API,
 `expo.modules.anchorsdk.AnchorGnssModule`), which exposes:
 
 - `start(): Promise<void>` — idempotent; registers a `GnssMeasurementsEvent.Callback`
@@ -206,7 +206,7 @@ artificially passes the kinematic envelope; the environmental gate fails it.
 solar azimuth/elevation), `barometricAltitudeMeters`, `haversineMeters`,
 `forwardBearingDeg`, `circularDiffDeg`, `magnetometerHeadingDeg`,
 `locationToFix`, `explainVerdict`, `buildExplanationPrompt`,
-`transcribeCommand`, `embedText`, `RingBuffer`, and the `AnchorGnss` binding.
+`transcribeCommand`, `embedText`, `RingBuffer`, and the `LocusGnss` binding.
 
 ## Development
 
@@ -221,7 +221,7 @@ node scripts/generate-fixtures.mjs   # regenerate the large fixtures determinist
 cannot run in Node or on an emulator without the dev client — they are
 verified by typecheck against the real `react-native-executorch@0.9.3` types,
 by unit tests of the pure prompt builder, and on-device through the demo app.
-The native `AnchorGnss` module compiles on EAS; measurement streaming itself
+The native `LocusGnss` module compiles on EAS; measurement streaming itself
 can only be exercised on hardware with a GNSS chipset.
 
 ## Autolinking notes

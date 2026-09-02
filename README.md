@@ -4,8 +4,8 @@
 
 The repo is an npm-workspaces monorepo:
 
-- [`packages/anchor-sdk`](packages/anchor-sdk) — the engine: Expo native module (Android) exposing raw satellite measurements, sensor streams, seven consistency checks, the RAIM/FDE state machine, and the on-device AI layer.
-- [`apps/anchor-demo`](apps/anchor-demo) — the mobile cockpit: an Expo SDK 57 app with an avionics glass-cockpit UI that runs on physical devices.
+- [`packages/locus-sdk`](packages/locus-sdk) — the engine: Expo native module (Android) exposing raw satellite measurements, sensor streams, seven consistency checks, the RAIM/FDE state machine, and the on-device AI layer.
+- [`apps/locus-mobile`](apps/locus-mobile) — the mobile cockpit: an Expo SDK 57 app with an avionics glass-cockpit UI that runs on physical devices.
 - [`apps/locus-office-kit`](apps/locus-office-kit) — the operator console: a React + Vite fleet monitoring console for fleet-wide integrity visualization and incident response.
 
 ## Table of contents
@@ -30,7 +30,7 @@ The repo is an npm-workspaces monorepo:
 - [Design system](#design-system)
 - [Getting started](#getting-started)
 - [Project structure](#project-structure)
-- [AnchorSDK interface](#anchorsdk-interface)
+- [LocusSDK interface](#locussdk-interface)
 - [Roadmap](#roadmap)
 - [License](#license)
 
@@ -49,11 +49,11 @@ Aviation solved this problem decades ago with **RAIM** (Receiver Autonomous Inte
 - Pseudorange residuals form a test statistic, compared against a threshold derived from a permitted **false-alarm probability**.
 - The outcome is a **protection level** (HPL) compared against an **alert limit** (HAL): either the fix is provably good enough, or it is not.
 
-Anchor re-derives that philosophy for a phone. Instead of pseudorange residuals, the redundancy comes from physically independent sensors (IMU, barometer, magnetometer, the sun); instead of one test statistic, six pure consistency checks with deterministic thresholds; instead of HPL vs HAL, a weighted verdict with explicit debouncing before trust is granted or restored.
+LOCUS re-derives that philosophy for a phone. Instead of pseudorange residuals, the redundancy comes from physically independent sensors (IMU, barometer, magnetometer, the sun); instead of one test statistic, six pure consistency checks with deterministic thresholds; instead of HPL vs HAL, a weighted verdict with explicit debouncing before trust is granted or restored.
 
 ### Why on-device AI
 
-The AI in Anchor is advisory: it explains verdicts in plain language, transcribes voice commands, and embeds text for search. Running it on-device (ExecuTorch on XNNPACK CPU) keeps the safety path pure and the advisory path private, offline, and latency-predictable. The separation is enforced at the type level: `explain(verdict)` receives an immutable `Verdict` and returns a `Promise<string>` — the AI can *describe* the safety state but can never *change* it.
+The AI in LOCUS is advisory: it explains verdicts in plain language, transcribes voice commands, and embeds text for search. Running it on-device (ExecuTorch on XNNPACK CPU) keeps the safety path pure and the advisory path private, offline, and latency-predictable. The separation is enforced at the type level: `explain(verdict)` receives an immutable `Verdict` and returns a `Promise<string>` — the AI can *describe* the safety state but can never *change* it.
 
 ### Why no cloud
 
@@ -66,40 +66,40 @@ Every position fix flows through seven stages. Stages 1–3 acquire and conditio
 ```text
 ┌──────────────────────────────────────────────────────────────────────┐
 │ 1 · SENSORS                                                          │
-│ GNSS measurements (Kotlin AnchorGnss, API 24+) · location @ 1 Hz     │
+│ GNSS measurements (Kotlin LocusGnss, API 24+) · location @ 1 Hz      │
 │ magnetometer + gyroscope (complementary heading) · barometer         │
 └───────────────────────────────────┬──────────────────────────────────┘
-                                   ▼
+                                    ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │ 2 · SENSOR VALIDATION                                                │
 │ raw-stream plausibility, dropout and rate handling                   │
 └───────────────────────────────────┬──────────────────────────────────┘
-                                   ▼
+                                    ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │ 3 · FUSION ESTIMATOR                                                 │
 │ complementary-filter heading · per-epoch SensorWindow assembly       │
 └───────────────────────────────────┬──────────────────────────────────┘
-                                   ▼
+                                    ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │ 4 · INTEGRITY EVALUATION                                             │
 │ six physics consistency checks — pure, independently weighted        │
 │ kinematic · heading · temporal · altitude · environmental · cn0      │
 └───────────────────────────────────┬──────────────────────────────────┘
-                                   ▼
+                                    ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │ 5 · SPOOF/ANOMALY ENGINE                                             │
 │ correlated-failure reasoning · synthetic-signal detection            │
 └───────────────────────────────────┬──────────────────────────────────┘
-                                   ▼
+                                    ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │ 6 · SAFETY STATE MACHINE (deterministic RAIM/FDE)                    │
 │ TRUSTED · DEGRADED · DENIED · RECOVERING — weights, critical         │
 │ pairs (kinematic+cn0, kinematic+heading), 5-eval recovery debounce   │
 └───────────────────────────────────┬──────────────────────────────────┘
-                                   ▼
+                                    ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │ 7 · CONSUMER                                                         │
-│ AnchorProvider → Verdict { state, checks[], reason }                 │
+│ LocusProvider → Verdict { state, checks[], reason }                  │
 │ StatusStrip · TapeGauges ×6 · EventLog · AI explain (all offline)    │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -108,16 +108,17 @@ Every position fix flows through seven stages. Stages 1–3 acquire and conditio
 
 | Path | Role |
 | --- | --- |
-| `packages/anchor-sdk` | Expo native module (standalone, **Android-only**): Kotlin GNSS bridge, sensor hooks, six checks, state machine, AI loaders. Pure logic is platform-agnostic TypeScript. |
-| `apps/anchor-demo` | Expo SDK 57 app (expo-router) with the avionics UI, voice control, semantic search, and debug controls. Consumes the SDK via the workspace. |
+| `packages/locus-sdk` | Expo native module (standalone, **Android-only**): Kotlin GNSS bridge, sensor hooks, seven checks, state machine, AI loaders. Pure logic is platform-agnostic TypeScript. |
+| `apps/locus-mobile` | Expo SDK 57 app (expo-router) with the avionics UI, voice control, semantic search, and debug controls. Consumes the SDK via the workspace. |
+| `apps/locus-office-kit` | React 19 + Vite fleet operator console for real-time monitoring, telemetry inspection, and incident alerts. |
 
-Root `package.json` wires both with npm workspaces; `npm install` at the root links `anchor-sdk` into the demo app.
+Root `package.json` wires all with npm workspaces; `npm install` at the root links `locus-sdk` into the mobile and office apps.
 
 ### Data flow: sensors to UI
 
 1. Sensor hooks (`useGnssMeasurements`, `useLocationStream`, `useImuStream`, `useBarometerStream`) stream into a ring buffer / window builder; each epoch assembles a `SensorWindow`.
 2. `evaluate(window, prevState)` runs the six checks and the state machine — a **pure, synchronous** function. No I/O, no randomness.
-3. The resulting `Verdict` (state, per-check results, human-readable reason) is published through `AnchorProvider`.
+3. The resulting `Verdict` (state, per-check results, human-readable reason) is published through `LocusProvider`.
 4. The UI reacts: the StatusStrip crossfades and fires a haptic on transition, the six TapeGauges ease to their new residuals, and the EventLog appends a timestamped row.
 5. On demand, the AI layer explains the latest verdict, transcribes a voice command, or embeds a search query — all lazily loaded on first use.
 
@@ -210,7 +211,7 @@ Every EventLog entry's reason is embedded (`embed`) when written. The search bar
 
 ### Demo app UI
 
-The demo (`apps/anchor-demo`, Expo SDK 57 + expo-router, distributed as an EAS-built dev client) presents the pipeline as an **avionics glass cockpit**:
+The mobile cockpit (`apps/locus-mobile`, Expo SDK 57 + expo-router, distributed as an EAS-built dev client) presents the pipeline as an **avionics glass cockpit**:
 
 - **StatusStrip** — full-width filled strip at the top: current state color, reason in mono type. Transitions crossfade and fire a haptic.
 - **Six TapeGauges** — vertical PFD-style scrolling tick scales, one per check (kinematic, heading, temporal, altitude, environmental, cn0) with IBM Plex Mono readouts and eased motion.
@@ -220,7 +221,7 @@ The demo (`apps/anchor-demo`, Expo SDK 57 + expo-router, distributed as an EAS-b
 
 ### Permissions and graceful degradation
 
-Before any native dialog appears, a **permissions primer screen** explains, in plain language, why Anchor wants location (it is the thing being monitored) and the microphone (voice commands only). Tapping **Continue** triggers the native dialogs **in sequence**, so each request arrives with context instead of a permission blitz on first launch.
+Before any native dialog appears, a **permissions primer screen** explains, in plain language, why LOCUS wants location (it is the thing being monitored) and the microphone (voice commands only). Tapping **Continue** triggers the native dialogs **in sequence**, so each request arrives with context instead of a permission blitz on first launch.
 
 | Permission denied | Behavior |
 | --- | --- |
@@ -263,17 +264,17 @@ The tape gauges are borrowed straight from the **primary flight display (PFD)**,
 ### Install
 
 ```bash
-git clone https://github.com/ChristopherJoshy/Anchor---Full-Build-.git
-cd Anchor---Full-Build-
+git clone https://github.com/Shankar-v27/LOCUS.git
+cd LOCUS
 npm install
 ```
 
 ### Build the dev client (EAS)
 
-The demo runs through a **development build** (`expo-dev-client`), since it bundles a custom native module:
+The mobile app runs through a **development build** (`expo-dev-client`), since it bundles a custom native module:
 
 ```bash
-cd apps/anchor-demo
+cd apps/locus-mobile
 npx eas login
 npx eas build --profile development --platform android
 ```
@@ -286,12 +287,12 @@ EAS builds in the cloud (no local Android SDK needed). When it finishes, install
 npx expo start --dev-client
 ```
 
-Launch the installed Anchor dev client; it connects to the Metro bundler.
+Launch the installed LOCUS dev client; it connects to the Metro bundler.
 
 ### Test and typecheck
 
 ```bash
-cd packages/anchor-sdk
+cd packages/locus-sdk
 npx jest           # unit tests incl. clean-drive / spoofed-jump fixtures
 npx tsc --noEmit   # typecheck
 ```
@@ -299,56 +300,56 @@ npx tsc --noEmit   # typecheck
 ## Project structure
 
 ```text
-anchor/
+locus/
 ├── package.json                  # npm workspaces root (packages/*, apps/*)
 ├── changes.md                    # dated build log
 ├── packages/
-│   └── anchor-sdk/               # Expo module — standalone, Android-only
+│   └── locus-sdk/                # Expo module — standalone, Android-only
 │       ├── package.json          # no-build TS package: main/types → src/index.ts
 │       ├── expo-module.config.json
 │       ├── src/
-│       │   ├── index.ts          # public barrel: createAnchorSDK, hooks, provider, types
-│       │   ├── AnchorSdk.types.ts
-│       │   ├── AnchorSdkModule.ts # typed proxy over the native module
-│       │   ├── checks/           # six pure physics checks, one file each
-│       │   ├── integrity/        # evaluateIntegrity: weighted RAIM/FDE state machine
-│       │   ├── solar/            # solarCompassHeading — NOAA solar position
-│       │   ├── hooks/            # useLocationStream · useImuStream ·
+│       │   ├── index.ts          # public barrel: createLocusSDK, hooks, provider, types
+│       │   ├── types.ts          # LocusSDK contract types
+│       │   ├── gnss/             # LocusGnssModule / LocusNetModule typed proxies
+│       │   ├── physics/          # pure physics checks: kinematic, heading, temporal, altitude, environmental, cn0, network
+│       │   ├── evaluateIntegrity.ts # weighted RAIM/FDE state machine
+│       │   ├── sensors/          # useLocationStream · useImuStream ·
 │       │   │                     #   useBarometerStream · useGnssMeasurements (ring buffer)
 │       │   ├── ai/               # lazy ExecuTorch loaders: explain/transcribe/embed
-│       │   ├── provider.tsx      # AnchorProvider context
+│       │   ├── LocusProvider.tsx # LocusProvider context
 │       │   └── __tests__/        # jest + fixtures: clean-drive.json, spoofed-jump.json
 │       └── android/
 │           └── src/main/java/…/AnchorGnss*.kt
 │                                 # registerGnssMeasurementsCallback (API 24+):
 │                                 #   per-satellite C/N0, constellation map, epoch timestamps
 └── apps/
-    └── anchor-demo/              # Expo SDK 57 + expo-router demo app
-        ├── app.json              # dev-client config, plugins, scheme
-        └── src/
-            ├── app/              # routes: _layout, cockpit, permissions primer
-            ├── components/       # StatusStrip · TapeGauge ×6 · EventLog · bottom bar
-            ├── constants/theme.ts # design tokens (panel colors, type roles)
-            ├── hooks/            # voice-command matching, semantic search
-            └── assets/           # fonts (IBM Plex Mono, Inter), images
+    ├── locus-mobile/             # Expo SDK 57 + expo-router mobile app
+    │   ├── app.json              # dev-client config, plugins, scheme
+    │   └── src/
+    │       ├── app/              # routes: _layout, dashboard, index (primer)
+    │       ├── components/       # StatusStrip · TapeGauge · EventLog · bottom bar
+    │       ├── theme.ts          # design tokens (panel colors, type roles)
+    │       ├── hooks/            # voice-command matching, semantic search, pipeline
+    │       └── assets/           # fonts (IBM Plex Mono, Inter), images
+    └── locus-office-kit/         # React 19 + Vite fleet operator console
 ```
 
 The SDK is a **no-build TypeScript package** — consumers (and Metro) consume `src/` directly, so there is no compile step to fall out of sync.
 
-## AnchorSDK interface
+## LocusSDK interface
 
 ```ts
-import { createAnchorSDK } from "anchor-sdk";
+import { createLocusSDK } from "locus-sdk";
 
-const anchor = createAnchorSDK();
+const locus = createLocusSDK();
 
 // Safety path — pure, synchronous, deterministic.
-const verdict: Verdict = anchor.evaluate(sensorWindow, previousState);
+const verdict: Verdict = locus.evaluate(sensorWindow, previousState);
 
 // Advisory path — async, lazy-loaded, fully on-device (ExecuTorch / XNNPACK).
-const explanation = await anchor.explain(verdict);   // "Fix denied: position jumped 1.2 km in one second."
-const transcript  = await anchor.transcribe(pcmF32); // Float32Array, 16 kHz mono → "simulate spoof"
-const vector      = await anchor.embed("signal looked synthetic"); // number[] for cosine search
+const explanation = await locus.explain(verdict);   // "Fix denied: position jumped 1.2 km in one second."
+const transcript  = await locus.transcribe(pcmF32); // Float32Array, 16 kHz mono → "simulate spoof"
+const vector      = await locus.embed("signal looked synthetic"); // number[] for cosine search
 ```
 
 ### Method reference
@@ -364,9 +365,9 @@ All three AI calls lazy-load their model on first invocation; the safety path pa
 
 ### Exports
 
-- `createAnchorSDK(): AnchorSDK` — factory wiring native module, checks, state machine, and AI loaders
-- **Sensor hooks:** `useLocationStream` (expo-location @ 1 Hz) · `useImuStream` (magnetometer + gyroscope complementary heading) · `useBarometerStream` · `useGnssMeasurements` (per-satellite C/N0 via the Kotlin `AnchorGnss` module, ring buffer)
-- `AnchorProvider` — React context publishing the latest `Verdict`
+- `createLocusSDK(): LocusSDK` — factory wiring native module, checks, state machine, and AI loaders
+- **Sensor hooks:** `useLocationStream` (expo-location @ 1 Hz) · `useImuStream` (magnetometer + gyroscope complementary heading) · `useBarometerStream` · `useGnssMeasurements` (per-satellite C/N0 via the Kotlin `LocusGnss` module, ring buffer)
+- `LocusProvider` — React context publishing the latest `Verdict`
 - **Types:** `IntegrityState`, `CheckId`, `CheckResult`, `Fix`, `ImuSample`, `BaroSample`, `SatelliteMeasurement`, `GnssMeasurementSample`, `SensorWindow`, `Verdict`
 
 ## Roadmap
