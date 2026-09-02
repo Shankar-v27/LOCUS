@@ -7,7 +7,7 @@
  *   [scroll]
  *     TELEMETRY      — live sensor rail, all measured values
  *     CHECKS         — six physics tape gauges
- *     NETWORK        — real AnchorNet VPN probe + IP↔GPS divergence panel
+ *     NETWORK        — real LocusNet VPN probe + IP↔GPS divergence panel
  *     INTEGRITY      — RAIM/FDE verdict + on-device Qwen advisory
  *     FLIGHT LOG     — recorder of machine transitions + network events
  *     DEMO CONTROLS  — disarmed by default; the ONLY staged-input surface
@@ -32,7 +32,7 @@ import { useVoiceCommands } from '@/hooks/useVoiceCommands';
 import { colors, colorForIntegrityState, fonts, hairline, monoNumeric, monoNumericBold, spacing } from '@/theme';
 import { cosineSimilarity } from '@/lib/search';
 import { startupLog } from '@/lib/startupLog';
-import type { LocusSDK, AnchorSDK, CheckId, CheckResult } from 'locus-sdk';
+import type { LocusSDK, CheckId, CheckResult } from 'locus-sdk';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -109,7 +109,7 @@ export default function DashboardScreen() {
     },
     [injectSpoof, reset],
   );
-  const voice = useVoiceCommands(sdk as AnchorSDK, onCommand);
+  const voice = useVoiceCommands(sdk as LocusSDK, onCommand);
 
   const locationDenied = permsLoaded && decisions.location === 'denied';
   const locationErrorActive = !!pipeline.locationError && permsLoaded && decisions.location === 'granted';
@@ -167,7 +167,7 @@ export default function DashboardScreen() {
     if (prevNetRef.current.vpn !== null && net.vpnActive !== prevNetRef.current.vpn) {
       recordNetwork(
         net.vpnActive
-          ? `VPN tunnel detected (AnchorNet) — IP ${net.ip ? `${net.ip.ip}${net.ip.city ? ` · ${net.ip.city}, ${net.ip.country ?? ''}` : ''}` : 'resolving'}; network integrity check FAILS while up`
+          ? `VPN tunnel detected (LocusNet) — IP ${net.ip ? `${net.ip.ip}${net.ip.city ? ` · ${net.ip.city}, ${net.ip.country ?? ''}` : ''}` : 'resolving'}; network integrity check FAILS while up`
           : 'VPN tunnel cleared — direct network path, integrity restored after debounce',
       );
     }

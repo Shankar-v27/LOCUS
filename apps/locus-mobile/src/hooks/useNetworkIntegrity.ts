@@ -1,7 +1,7 @@
 /**
  * useNetworkIntegrity — REAL network-layer signals, zero simulation.
  *
- *  - VPN tunnel detection via the AnchorNet native module: kernel tun/tap
+ *  - VPN tunnel detection via the LocusNet native module: kernel tun/tap
  *    interfaces + ConnectivityManager TRANSPORT_VPN capability, polled 2 s.
  *  - IP geolocation over HTTPS (ipwho.is, ipapi.co fallback) every 60 s.
  *  - Real great-circle divergence (SDK haversine) between the IP location and
@@ -10,7 +10,7 @@
  *    authoritative; this signal never alters the safety state.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AnchorNet, haversineMeters } from 'locus-sdk';
+import { LocusNet, haversineMeters } from 'locus-sdk';
 
 export interface IpGeo {
   ip: string | null;
@@ -95,7 +95,7 @@ export function useNetworkIntelligence(fix: { latitude: number; longitude: numbe
   useEffect(() => {
     const readVpn = () => {
       try {
-        setVpnActive(AnchorNet.isVpnActive());
+        setVpnActive(LocusNet.isVpnActive());
       } catch {
         // Native module unavailable off-Android — signal stays false.
       }

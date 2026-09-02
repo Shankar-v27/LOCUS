@@ -2,7 +2,7 @@ import { NativeModule, requireNativeModule } from 'expo';
 
 /**
  * JS contract mirror of the payloads emitted by the LocusGnss native module
- * (android/src/main/java/expo/modules/anchorsdk/AnchorGnssModule.kt).
+ * (android/src/main/java/expo/modules/locussdk/LocusGnssModule.kt).
  */
 export interface LocusGnssSatellite {
   svid: number;
@@ -48,12 +48,5 @@ declare class LocusGnssNativeModule extends NativeModule<LocusGnssModuleEvents> 
   isSupported(): boolean;
 }
 
-// Backwards-compatible type aliases
-export type AnchorGnssSatellite = LocusGnssSatellite;
-export type AnchorGnssMeasurementEvent = LocusGnssMeasurementEvent;
-export type AnchorGnssErrorEvent = LocusGnssErrorEvent;
-export type AnchorGnssStatus = LocusGnssStatus;
-export type AnchorGnssStatusEvent = LocusGnssStatusEvent;
-
-export const LocusGnss = requireNativeModule<LocusGnssNativeModule>('AnchorGnss');
+export const LocusGnss = requireNativeModule<LocusGnssNativeModule>('LocusGnss');
 export default LocusGnss;

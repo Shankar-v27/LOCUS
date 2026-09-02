@@ -10,23 +10,16 @@
 // Raw GNSS C/N0 measurement stream (native module binding).
 export {
   default as LocusGnss,
-  default as AnchorGnss,
   type LocusGnssSatellite,
   type LocusGnssMeasurementEvent,
   type LocusGnssErrorEvent,
   type LocusGnssStatus,
   type LocusGnssStatusEvent,
-  type AnchorGnssSatellite,
-  type AnchorGnssMeasurementEvent,
-  type AnchorGnssErrorEvent,
-  type AnchorGnssStatus,
-  type AnchorGnssStatusEvent,
 } from './gnss/LocusGnssModule';
 
 // Network-integrity signals (real OS-level VPN detection).
 export {
   default as LocusNet,
-  default as AnchorNet,
 } from './gnss/LocusNetModule';
 
 // Sensor hooks and their pure helpers.

@@ -1,6 +1,6 @@
 {
   "platforms": ["android"],
   "android": {
-    "modules": ["expo.modules.anchorsdk.AnchorGnssModule", "expo.modules.anchorsdk.AnchorNetModule"]
+    "modules": ["expo.modules.locussdk.LocusGnssModule", "expo.modules.locussdk.LocusNetModule"]
   }
 }

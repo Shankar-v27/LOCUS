@@ -70,7 +70,7 @@ export const ADVISORY_LATENCY_BUDGET_MS = 6000;
  *
  * STRICT: takes the verdict, returns text. There is deliberately no path from
  * here back to the state machine — explanations can never change state.
- * Lazy: the model loads on the first call (or earlier if AnchorProvider is
+ * Lazy: the model loads on the first call (or earlier if LocusProvider is
  * mounted); repeated calls reuse the loaded instance and each call is
  * stateless (the full context travels in the prompt, not in chat history).
  */

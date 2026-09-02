@@ -68,7 +68,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
-// The native AnchorGnss / LocusGnss binding throws requireNativeModule in Jest.
+// The native LocusGnss binding throws requireNativeModule in Jest.
 jest.mock('locus-sdk/src/gnss/LocusGnssModule', () => ({
   __esModule: true,
   LocusGnss: {
@@ -85,29 +85,12 @@ jest.mock('locus-sdk/src/gnss/LocusGnssModule', () => ({
   },
 }));
 
-jest.mock('locus-sdk/src/gnss/AnchorGnssModule', () => ({
-  __esModule: true,
-  default: {
-    start: jest.fn(async () => undefined),
-    stop: jest.fn(async () => undefined),
-    isSupported: () => true,
-    addListener: () => ({ remove: () => undefined }),
-  },
-}));
-
-// The native AnchorNet / LocusNet binding throws requireNativeModule in Jest.
+// The native LocusNet binding throws requireNativeModule in Jest.
 jest.mock('locus-sdk/src/gnss/LocusNetModule', () => ({
   __esModule: true,
   LocusNet: {
     isVpnActive: () => false,
   },
-  default: {
-    isVpnActive: () => false,
-  },
-}));
-
-jest.mock('locus-sdk/src/gnss/AnchorNetModule', () => ({
-  __esModule: true,
   default: {
     isVpnActive: () => false,
   },

@@ -1,4 +1,4 @@
-package expo.modules.anchorsdk
+package expo.modules.locussdk
 
 import android.content.Context
 import android.net.ConnectivityManager
@@ -8,7 +8,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import java.net.NetworkInterface
 
 /**
- * AnchorNet — real network-integrity signals for the demo cross-checks.
+ * LocusNet — real network-integrity signals for the LOCUS cross-checks.
  *
  * isVpnActive(): true when a VPN tunnel is up on this device. Two independent
  * probes, either is sufficient:
@@ -18,9 +18,9 @@ import java.net.NetworkInterface
  * This is the same signal family commercial anti-fraud SDKs use; it is read
  * from the OS, never synthesized.
  */
-class AnchorNetModule : Module() {
+class LocusNetModule : Module() {
     override fun definition() = ModuleDefinition {
-        Name("AnchorNet")
+        Name("LocusNet")
 
         Function("isVpnActive") {
             val context = appContext.reactContext

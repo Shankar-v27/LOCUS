@@ -10,7 +10,7 @@
  *  - 20s transcription timeout (model may be downloading on first use)
  *  - Busy guard + proper chunk clearing on every path
  */
-import type { LocusSDK, AnchorSDK } from 'locus-sdk';
+import type { LocusSDK } from 'locus-sdk';
 import { AudioModule, setAudioModeAsync, useAudioStream } from 'expo-audio';
 import { useCallback, useRef, useState } from 'react';
 
@@ -143,7 +143,7 @@ export function matchCommand(transcript: string): VoiceCommand | null {
   return best?.command ?? null;
 }
 
-export function useVoiceCommands(sdk: AnchorSDK, onCommand: (command: VoiceCommand) => void) {
+export function useVoiceCommands(sdk: LocusSDK, onCommand: (command: VoiceCommand) => void) {
   const [status, setStatus] = useState<VoiceStatus>('idle');
   const [lastTranscript, setLastTranscript] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);

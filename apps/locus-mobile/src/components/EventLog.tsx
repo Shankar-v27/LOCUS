@@ -3,7 +3,7 @@
  * fixed-width timestamp column, newest first.
  */
 import { colors, colorForIntegrityState, fonts, hairline, monoNumeric, spacing } from '@/theme';
-import type { EventLogEntry } from '@/hooks/useAnchorPipeline';
+import type { EventLogEntry } from '@/hooks/useLocusPipeline';
 import { StyleSheet, Text, View } from 'react-native';
 
 function formatClock(ts: number): string {

@@ -15,19 +15,19 @@
     "gnss",
     "gps-integrity",
     "anti-spoofing",
-    "anchor-sdk"
+    "locus-sdk"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/ChristopherJoshy/Anchor---Full-Build-.git",
-    "directory": "packages/anchor-sdk"
+    "url": "https://github.com/Shankar-v27/LOCUS.git",
+    "directory": "packages/locus-sdk"
   },
   "bugs": {
-    "url": "https://github.com/ChristopherJoshy/Anchor---Full-Build-/issues"
+    "url": "https://github.com/Shankar-v27/LOCUS/issues"
   },
   "author": "ChristopherJoshy <ChristopherJoshy@users.noreply.github.com> (https://github.com/ChristopherJoshy)",
   "license": "MIT",
-  "homepage": "https://github.com/ChristopherJoshy/Anchor---Full-Build-#readme",
+  "homepage": "https://github.com/Shankar-v27/LOCUS#readme",
   "dependencies": {
     "expo-asset": "^57.0.15",
     "expo-file-system": "^57.0.6",

@@ -1,8 +1,8 @@
 /**
- * Anchor SDK shared contract.
+ * LOCUS SDK shared contract.
  *
- * These types are the integration contract between anchor-sdk and consumers
- * (apps/anchor-demo). They must not change shape without a coordinated update
+ * These types are the integration contract between locus-sdk and consumers
+ * (apps/locus-mobile). They must not change shape without a coordinated update
  * on both sides.
  */
 
@@ -71,7 +71,7 @@ export interface GnssMeasurementSample {
   elapsedRealtimeNanos?: number;
 }
 
-/** One OS-level network-integrity sample (real AnchorNet probe output). */
+/** One OS-level network-integrity sample (real LocusNet probe output). */
 export interface NetworkSignal {
   /** True when a VPN tunnel is up (tun/tap interface or TRANSPORT_VPN). */
   vpnActive: boolean;
@@ -83,7 +83,7 @@ export interface SensorWindow {
   baro: BaroSample[];
   gnss: GnssMeasurementSample[];
   /**
-   * OS-level network-integrity signal for the current instant (AnchorNet).
+   * OS-level network-integrity signal for the current instant (LocusNet).
    * Optional: when absent the network check passes with a "no signal" note
    * rather than inventing a value.
    */
@@ -105,7 +105,7 @@ export interface Verdict {
  * given — the type has no path back into the state machine, so explanations
  * can never mutate integrity state.
  */
-export interface AnchorSDK {
+export interface LocusSDK {
   evaluate(window: SensorWindow, prevState?: IntegrityState): Verdict;
   explain(verdict: Verdict): Promise<string>;
   /** 16 kHz mono PCM waveform. */
@@ -113,5 +113,5 @@ export interface AnchorSDK {
   embed(text: string): Promise<number[]>;
 }
 
-/** Canonical LOCUS SDK contract. */
-export type LocusSDK = AnchorSDK;
+/** Backward-compatible alias. */
+export type AnchorSDK = LocusSDK;

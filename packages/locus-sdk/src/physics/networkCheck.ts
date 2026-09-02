@@ -6,7 +6,7 @@ import type { CheckResult, SensorWindow } from '../types';
  * derived corroboration (IP geolocation, geofencing, content licensing, and
  * every network-based position estimate) is unreliable while it is up.
  *
- * The signal is the real OS report (AnchorNet: tun/tap interfaces ∨
+ * The signal is the real OS report (LocusNet: tun/tap interfaces ∨
  * TRANSPORT_VPN capability) passed in the window — never synthesized here.
  *
  * Semantics: a tunnel up fails the check, and because `network` participates

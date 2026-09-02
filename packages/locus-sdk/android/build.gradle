@@ -3,11 +3,11 @@ plugins {
   id 'expo-module-gradle-plugin'
 }
 
-group = 'expo.modules.anchorsdk'
+group = 'expo.modules.locussdk'
 version = '0.1.0'
 
 android {
-  namespace "expo.modules.anchorsdk"
+  namespace "expo.modules.locussdk"
   defaultConfig {
     versionCode 1
     versionName "0.1.0"

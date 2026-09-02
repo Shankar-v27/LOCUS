@@ -193,10 +193,10 @@ export function stepIntegrity(
 }
 
 /**
- * Stateless evaluation per the public AnchorSDK contract: derives the
+ * Stateless evaluation per the public LocusSDK contract: derives the
  * transition from `prevState` alone. From DENIED or DEGRADED a clean window
  * maps to RECOVERING (the debounce-counted path is available via
- * `stepIntegrity`, which `createAnchorSDK().evaluate` uses).
+ * `stepIntegrity`, which `createLocusSDK().evaluate` uses).
  */
 export function evaluateIntegrity(window: SensorWindow, prevState?: IntegrityState): EvaluateResult {
   // Stateless view: the machine is reconstructed from prevState alone. A

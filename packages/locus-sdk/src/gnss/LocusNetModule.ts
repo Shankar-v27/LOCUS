@@ -1,7 +1,7 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
 /**
- * JS contract for the LocusNet native module (android/.../AnchorNetModule.kt).
+ * JS contract for the LocusNet native module (android/.../LocusNetModule.kt).
  * Exposes real OS-level network-integrity signals — no synthesized values.
  */
 declare class LocusNetNativeModule extends NativeModule<Record<string, never>> {
@@ -12,5 +12,5 @@ declare class LocusNetNativeModule extends NativeModule<Record<string, never>> {
   isVpnActive(): boolean;
 }
 
-export const LocusNet = requireNativeModule<LocusNetNativeModule>('AnchorNet');
+export const LocusNet = requireNativeModule<LocusNetNativeModule>('LocusNet');
 export default LocusNet;

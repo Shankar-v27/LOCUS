@@ -3,7 +3,7 @@
  * stubbed. The pipeline consumes synthetic streams built from the SDK's own
  * fixtures (clean-drive.json / spoofed-jump.json); the seven checks (six
  * physics + network) and the RAIM/FDE state machine run their real code
- * through createAnchorSDK.
+ * through createLocusSDK.
  */
 import { act, render, screen, waitFor } from '@testing-library/react-native';
 

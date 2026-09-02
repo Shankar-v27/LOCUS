@@ -1,4 +1,4 @@
-package expo.modules.anchorsdk
+package expo.modules.locussdk
 
 import android.Manifest
 import android.content.Context
@@ -17,7 +17,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
-private const val TAG = "AnchorGnss"
+private const val TAG = "LocusGnss"
 
 /**
  * CONSTELLATION_* integer codes, identical on android.location.GnssMeasurement
@@ -53,7 +53,7 @@ internal fun constellationName(constellationType: Int): String = when (constella
 }
 
 /**
- * AnchorGnss — raw GNSS C/N0 measurement streaming for the Anchor integrity pipeline.
+ * LocusGnss — raw GNSS C/N0 measurement streaming for the LOCUS integrity pipeline.
  *
  * Requires ACCESS_FINE_LOCATION to have been granted by the embedding app BEFORE
  * `start()` is called; this module never requests permissions itself.
@@ -69,18 +69,18 @@ internal fun constellationName(constellationType: Int): String = when (constella
  * permission / location-enabled checks upfront instead of relying on it. On API
  * 24-30 onStatusChanged carries the real subsystem status and is forwarded as-is.
  */
-class AnchorGnssModule : Module() {
+class LocusGnssModule : Module() {
     @Volatile
     private var measurementCallback: GnssMeasurementsEvent.Callback? = null
 
     private val deliveryExecutor: Executor by lazy {
-        Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "AnchorGnss") }
+        Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "LocusGnss") }
     }
 
     private val mainHandler: Handler by lazy { Handler(Looper.getMainLooper()) }
 
     override fun definition() = ModuleDefinition {
-        Name("AnchorGnss")
+        Name("LocusGnss")
 
         Events("onMeasurement", "onError", "onStatus")
 
@@ -124,7 +124,7 @@ class AnchorGnssModule : Module() {
 
     private fun startStreaming(promise: Promise) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            val message = "AnchorGnss requires Android 7.0 (API 24) or newer for GnssMeasurements; this device is API ${Build.VERSION.SDK_INT}."
+            val message = "LocusGnss requires Android 7.0 (API 24) or newer for GnssMeasurements; this device is API ${Build.VERSION.SDK_INT}."
             emitError("E_UNSUPPORTED", message)
             promise.reject("E_UNSUPPORTED", message, null)
             return
@@ -145,7 +145,7 @@ class AnchorGnssModule : Module() {
         }
 
         if (!hasFineLocationPermission()) {
-            val message = "ACCESS_FINE_LOCATION has not been granted. Request location permission in the app before calling AnchorGnss.start()."
+            val message = "ACCESS_FINE_LOCATION has not been granted. Request location permission in the app before calling LocusGnss.start()."
             emitError("E_PERMISSION", message)
             emitStatus("notAllowed")
             promise.reject("E_PERMISSION", message, null)
@@ -210,7 +210,7 @@ class AnchorGnssModule : Module() {
             }
         } catch (e: SecurityException) {
             measurementCallback = null
-            val message = "ACCESS_FINE_LOCATION is required for raw GNSS measurements and was not granted (SecurityException). Request location permission in the app before calling AnchorGnss.start()."
+            val message = "ACCESS_FINE_LOCATION is required for raw GNSS measurements and was not granted (SecurityException). Request location permission in the app before calling LocusGnss.start()."
             Log.e(TAG, message, e)
             emitError("E_PERMISSION", message)
             emitStatus("notAllowed")

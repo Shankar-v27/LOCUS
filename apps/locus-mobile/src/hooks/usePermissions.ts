@@ -18,7 +18,7 @@ export interface PermissionDecisions {
   primerCompleted: boolean;
 }
 
-const STORAGE_KEY = 'anchor.permissions.v1';
+const STORAGE_KEY = 'locus.permissions.v1';
 
 const DEFAULTS: PermissionDecisions = {
   location: 'unknown',

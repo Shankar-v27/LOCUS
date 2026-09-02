@@ -1,5 +1,5 @@
 /**
- * Anchor design system — avionics glass-cockpit instrument.
+ * LOCUS design system — avionics glass-cockpit instrument.
  *
  * Hard edges (zero radius everywhere), hairline dividers, tabular mono
  * numerals, no gradients. Semantic color rule, never decorative:

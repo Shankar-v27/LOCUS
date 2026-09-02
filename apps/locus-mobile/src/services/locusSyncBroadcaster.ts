@@ -6,7 +6,7 @@
  *  - 100% fire-and-forget: failure to reach Office Kit never affects local RAIM
  *    evaluation, latency budget, or on-device AI operations.
  */
-import type { EventLogEntry } from '@/hooks/useAnchorPipeline';
+import type { EventLogEntry } from '@/hooks/useLocusPipeline';
 
 export interface LocusSyncPayload {
   id: string | number;

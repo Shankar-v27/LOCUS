@@ -10,8 +10,8 @@
  *  - react-native-executorch's index installs JSI bindings at import time,
  *    so the package is imported dynamically (never at module scope) and
  *    `tsc`/jest environments without the native module stay clean.
- *  - AnchorProvider pre-warms the SAME caches, so a mounted provider and
- *    createAnchorSDK() share one loaded model per task instead of two.
+ *  - LocusProvider pre-warms the SAME caches, so a mounted provider and
+ *    createLocusSDK() share one loaded model per task instead of two.
  *  - Model downloads surface real progress (fraction 0..1 straight from the
  *    resource fetcher) through subscribeModelDownloads — the UI renders this;
  *    nothing is simulated.
@@ -192,7 +192,7 @@ export function loadTextEmbeddings(): Promise<TextEmbeddingsModule> {
   });
 }
 
-/** Pre-warm used by AnchorProvider; loads models sequentially to prevent socket exhaustion. */
+/** Pre-warm used by LocusProvider; loads models sequentially to prevent socket exhaustion. */
 export function preloadModels(options: PreloadOptions = {}): void {
   const { llm = true, speechToText = true, textEmbeddings = true } = options;
   (async () => {

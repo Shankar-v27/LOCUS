@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import AnchorGnss, {
-  type AnchorGnssStatus,
-} from '../gnss/AnchorGnssModule';
+import LocusGnss, {
+  type LocusGnssStatus,
+} from '../gnss/LocusGnssModule';
 import type { GnssMeasurementSample } from '../types';
 import { RingBuffer } from '../utils/ringBuffer';
 
@@ -11,12 +11,12 @@ export interface GnssMeasurementsStream {
   /** Last `historyLength` measurement epochs, chronological (oldest first). */
   history: GnssMeasurementSample[];
   error: string | null;
-  status: AnchorGnssStatus | null;
+  status: LocusGnssStatus | null;
   supported: boolean | null;
 }
 
 /**
- * Streams raw GNSS C/N0 measurement epochs from the AnchorGnss / LocusGnss native module
+ * Streams raw GNSS C/N0 measurement epochs from the LocusGnss native module
  * and retains the last `historyLength` epochs in a ring buffer (default 600,
  * ~10 minutes at 1 Hz).
  *
@@ -28,7 +28,7 @@ export function useGnssMeasurements(historyLength = 600): GnssMeasurementsStream
   const [latest, setLatest] = useState<GnssMeasurementSample | null>(null);
   const [history, setHistory] = useState<GnssMeasurementSample[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<AnchorGnssStatus | null>(null);
+  const [status, setStatus] = useState<LocusGnssStatus | null>(null);
   const [supported, setSupported] = useState<boolean | null>(null);
   const bufferRef = useRef(new RingBuffer<GnssMeasurementSample>(historyLength));
   const startedRef = useRef(false);
@@ -36,7 +36,7 @@ export function useGnssMeasurements(historyLength = 600): GnssMeasurementsStream
   useEffect(() => {
     let cancelled = false;
 
-    const measurementSubscription = AnchorGnss.addListener('onMeasurement', (event) => {
+    const measurementSubscription = LocusGnss.addListener('onMeasurement', (event) => {
       if (cancelled) return;
       const sample: GnssMeasurementSample = {
         satellites: event.satellites.map((satellite) => ({
@@ -56,26 +56,26 @@ export function useGnssMeasurements(historyLength = 600): GnssMeasurementsStream
       setError(null);
     });
 
-    const errorSubscription = AnchorGnss.addListener('onError', (event) => {
+    const errorSubscription = LocusGnss.addListener('onError', (event) => {
       if (cancelled) return;
       setError(`${event.code}: ${event.message}`);
     });
 
-    const statusSubscription = AnchorGnss.addListener('onStatus', (event) => {
+    const statusSubscription = LocusGnss.addListener('onStatus', (event) => {
       if (cancelled) return;
       setStatus(event.status);
     });
 
     const startStreaming = async () => {
       try {
-        const isSupported = AnchorGnss.isSupported();
+        const isSupported = LocusGnss.isSupported();
         if (cancelled) return;
         setSupported(isSupported);
         if (!isSupported) {
           setError('E_UNSUPPORTED: Raw GNSS measurements require Android 7.0 (API 24)+ with a LocationManager.');
           return;
         }
-        await AnchorGnss.start();
+        await LocusGnss.start();
         startedRef.current = true;
         if (!cancelled) {
           setError(null);
@@ -102,7 +102,7 @@ export function useGnssMeasurements(historyLength = 600): GnssMeasurementsStream
       measurementSubscription.remove();
       errorSubscription.remove();
       statusSubscription.remove();
-      AnchorGnss.stop().catch(() => {
+      LocusGnss.stop().catch(() => {
         // stop() failing at teardown (module already torn down) is not actionable.
       });
     };

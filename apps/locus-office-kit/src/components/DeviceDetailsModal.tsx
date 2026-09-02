@@ -30,7 +30,7 @@ export const DeviceDetailsModal: React.FC<DeviceDetailsModalProps> = ({
     { id: 'temporal', name: 'Monotonicity & Frame Interval', passed: true },
     { id: 'altitude', name: 'Barometric Pressure vs Geometric Altitude', passed: true },
     { id: 'environmental', name: 'Physical Acceleration Bounds', passed: true },
-    { id: 'network', name: 'OS Routing & Tunnel Integrity (AnchorNet/LocusNet)', passed: true },
+    { id: 'network', name: 'OS Routing & Tunnel Integrity (LocusNet)', passed: true },
   ];
 
   return (
