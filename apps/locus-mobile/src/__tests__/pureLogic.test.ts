@@ -4,7 +4,6 @@
  */
 import { cosineSimilarity } from '../lib/search';
 import { matchCommand, VOICE_COMMANDS } from '../hooks/useVoiceCommands';
-import { getDeviceIdentity } from '../services/locusSyncBroadcaster';
 
 describe('voice command matching', () => {
   it('knows the fixed command set', () => {
@@ -62,6 +61,13 @@ describe('cosine similarity ranking', () => {
   });
 });
 
+import {
+  getDeviceIdentity,
+  normalizeOfficeKitEndpoint,
+  getOfficeKitEndpoints,
+  DEFAULT_OFFICE_KIT_ENDPOINTS,
+} from '../services/locusSyncBroadcaster';
+
 describe('device identity derivation', () => {
   it('returns a valid normalized deviceId and displayName', () => {
     const identity = getDeviceIdentity();
@@ -71,4 +77,53 @@ describe('device identity derivation', () => {
     expect(identity.deviceName.startsWith('FIELD-UNIT')).toBe(true);
   });
 });
+
+describe('office kit endpoint resolution', () => {
+  it('normalizes various host and URL configurations into valid /api/events endpoints', () => {
+    expect(normalizeOfficeKitEndpoint('192.168.1.50')).toBe('http://192.168.1.50:5173/api/events');
+    expect(normalizeOfficeKitEndpoint('192.168.1.50:5173')).toBe('http://192.168.1.50:5173/api/events');
+    expect(normalizeOfficeKitEndpoint('http://192.168.1.50:5173')).toBe('http://192.168.1.50:5173/api/events');
+    expect(normalizeOfficeKitEndpoint('http://192.168.1.50:5173/')).toBe('http://192.168.1.50:5173/api/events');
+    expect(normalizeOfficeKitEndpoint('http://192.168.1.50:5173/api/events')).toBe(
+      'http://192.168.1.50:5173/api/events',
+    );
+    expect(normalizeOfficeKitEndpoint('https://console.locus-fleet.org')).toBe(
+      'https://console.locus-fleet.org/api/events',
+    );
+    expect(normalizeOfficeKitEndpoint('')).toBe('');
+  });
+
+  it('provides default dev endpoints when no environment variable is set', () => {
+    const prev = process.env.EXPO_PUBLIC_OFFICE_KIT_URL;
+    delete process.env.EXPO_PUBLIC_OFFICE_KIT_URL;
+    delete process.env.EXPO_PUBLIC_OFFICE_KIT_HOST;
+
+    const endpoints = getOfficeKitEndpoints();
+    expect(endpoints).toEqual(DEFAULT_OFFICE_KIT_ENDPOINTS);
+
+    if (prev) process.env.EXPO_PUBLIC_OFFICE_KIT_URL = prev;
+  });
+
+  it('prioritizes EXPO_PUBLIC_OFFICE_KIT_URL when configured', () => {
+    const prev = process.env.EXPO_PUBLIC_OFFICE_KIT_URL;
+    process.env.EXPO_PUBLIC_OFFICE_KIT_URL = '192.168.1.99';
+
+    const endpoints = getOfficeKitEndpoints();
+    expect(endpoints[0]).toBe('http://192.168.1.99:5173/api/events');
+    expect(endpoints).toContain('http://localhost:5173/api/events');
+    expect(endpoints).toContain('http://10.0.2.2:5173/api/events');
+
+    if (prev) {
+      process.env.EXPO_PUBLIC_OFFICE_KIT_URL = prev;
+    } else {
+      delete process.env.EXPO_PUBLIC_OFFICE_KIT_URL;
+    }
+  });
+
+  it('supports runtime customEndpoint override', () => {
+    const endpoints = getOfficeKitEndpoints('10.200.1.5:8080');
+    expect(endpoints[0]).toBe('http://10.200.1.5:8080/api/events');
+  });
+});
+
 

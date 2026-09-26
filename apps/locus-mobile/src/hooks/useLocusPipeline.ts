@@ -180,7 +180,17 @@ function buildSpoofGnssEpoch(timestamp: number, epochIdx: number): GnssMeasureme
   };
 }
 
-export function useLocusPipeline() {
+export interface LocusPipelineOptions {
+  /** If false, skips automatic background LLM/Embedding execution on state transitions. Default true. */
+  autoEnrichAdvisory?: boolean;
+}
+
+export function useLocusPipeline(options?: LocusPipelineOptions) {
+  const autoEnrichRef = useRef(options?.autoEnrichAdvisory ?? true);
+  useEffect(() => {
+    autoEnrichRef.current = options?.autoEnrichAdvisory ?? true;
+  }, [options?.autoEnrichAdvisory]);
+
   // The SDK instance owns the recovery-debounce machine; RESET replaces it.
   const [sdk, setSdk] = useState<LocusSDK>(() => createLocusSDK());
   const location = useLocationStream();
@@ -266,30 +276,34 @@ export function useLocusPipeline() {
 
       // Non-blocking observer: export event to Office Kit if reachable (initial state transition)
       broadcastToOfficeKit(entry, telemSnapshot, false).catch(() => {});
-      // REAL on-device advisory enrichment (Qwen3 0.6B + mpnet embeddings),
-      // latency-capped by the SDK watchdog. The UI shows the deterministic
-      // reason until the model produces text.
-      sdk
-        .explain(v)
-        .then((explanation: string) => {
-          if (generationRef.current !== gen) return;
-          const enriched = { ...entry, explanation };
-          setEvents((prev) => prev.map((e) => (e.id === id ? enriched : e)));
-          broadcastToOfficeKit(enriched, telemSnapshot, true).catch(() => {});
-        })
-        .catch(() => {
-          if (generationRef.current !== gen) return;
-          setEvents((prev) =>
-            prev.map((e) => (e.id === id ? { ...e, explanation: '(explanation unavailable)' } : e)),
-          );
-        });
-      sdk
-        .embed(v.reason)
-        .then((embedding: number[]) => {
-          if (generationRef.current !== gen) return;
-          setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, embedding } : e)));
-        })
-        .catch(() => {});
+
+      // If runtime policy enables automated AI enrichment (HIGH_PERFORMANCE):
+      if (autoEnrichRef.current) {
+        // REAL on-device advisory enrichment (Qwen3 0.6B + mpnet embeddings),
+        // latency-capped by the SDK watchdog. The UI shows the deterministic
+        // reason until the model produces text.
+        sdk
+          .explain(v)
+          .then((explanation: string) => {
+            if (generationRef.current !== gen) return;
+            const enriched = { ...entry, explanation };
+            setEvents((prev) => prev.map((e) => (e.id === id ? enriched : e)));
+            broadcastToOfficeKit(enriched, telemSnapshot, true).catch(() => {});
+          })
+          .catch(() => {
+            if (generationRef.current !== gen) return;
+            setEvents((prev) =>
+              prev.map((e) => (e.id === id ? { ...e, explanation: '(explanation unavailable)' } : e)),
+            );
+          });
+        sdk
+          .embed(v.reason)
+          .then((embedding: number[]) => {
+            if (generationRef.current !== gen) return;
+            setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, embedding } : e)));
+          })
+          .catch(() => {});
+      }
     },
     [sdk],
   );
@@ -610,6 +624,26 @@ export function useLocusPipeline() {
     queueAttack(buildSpoofFixes(base, 3), attackEpochs(3));
   }, [demoArmed, reset, queueAttack, attackEpochs]);
 
+  const explainOnDemand = useCallback(
+    async (targetVerdict?: Verdict | null) => {
+      const v = targetVerdict ?? verdictRef.current;
+      if (!v) return;
+      const gen = generationRef.current;
+      try {
+        const explanation = await sdk.explain(v);
+        if (generationRef.current !== gen) return;
+        setEvents((prev) => {
+          if (prev.length === 0) return prev;
+          const targetId = prev[0].id;
+          return prev.map((e) => (e.id === targetId ? { ...e, explanation } : e));
+        });
+      } catch {
+        // Handled silently
+      }
+    },
+    [sdk],
+  );
+
   return {
     // sensor health passthrough for instrument labels
     locationGranted: location.granted,
@@ -636,6 +670,7 @@ export function useLocusPipeline() {
     recoveryDemo,
     recordNetwork,
     reset,
+    explainOnDemand,
     sdk,
   };
 }

@@ -81,15 +81,25 @@ function useFontGate(): { fontsReady: boolean; useCustomFonts: boolean } {
   return { fontsReady: false, useCustomFonts: false };
 }
 
+import * as Device from 'expo-device';
+import { evaluateRuntimePolicy } from '@/services/adaptiveRuntimePolicy';
+
 export default function RootLayout() {
   const { fontsReady, useCustomFonts } = useFontGate();
+
+  const initialPolicy = evaluateRuntimePolicy({
+    totalMemoryBytes: Device.totalMemory ?? null,
+    deviceYearClass: Device.deviceYearClass ?? null,
+    isDevice: Device.isDevice ?? true,
+  });
 
   useEffect(() => {
     if (fontsReady) {
       startupLog(useCustomFonts ? 'fonts loaded' : 'fonts unavailable — system fonts in use');
+      startupLog(`adaptive runtime initial profile: ${initialPolicy.profile} (preloadAI=${initialPolicy.preloadAI})`);
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsReady, useCustomFonts]);
+  }, [fontsReady, useCustomFonts, initialPolicy.profile, initialPolicy.preloadAI]);
 
   if (!fontsReady) {
     return null;
@@ -98,7 +108,11 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <RootErrorBoundary>
-        <LocusProvider>
+        <LocusProvider
+          llm={initialPolicy.preloadAI}
+          speechToText={initialPolicy.preloadAI}
+          textEmbeddings={initialPolicy.preloadAI}
+        >
           <StartupLogEffect />
           <StatusBar style="light" />
           <Stack

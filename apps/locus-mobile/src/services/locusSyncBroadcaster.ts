@@ -35,10 +35,76 @@ export interface LocusSyncPayload {
   };
 }
 
-const DEFAULT_OFFICE_KIT_ENDPOINTS = [
+export const DEFAULT_OFFICE_KIT_ENDPOINTS = [
   'http://localhost:5173/api/events', // via ADB reverse tcp:5173 tcp:5173
   'http://10.0.2.2:5173/api/events', // Android Emulator host loopback
 ];
+
+/**
+ * Normalizes any configured host, IP, or URL string into a valid Office Kit `/api/events` endpoint.
+ * Handles:
+ *  - "192.168.1.50" -> "http://192.168.1.50:5173/api/events"
+ *  - "192.168.1.50:5173" -> "http://192.168.1.50:5173/api/events"
+ *  - "http://192.168.1.50:5173" -> "http://192.168.1.50:5173/api/events"
+ *  - "http://192.168.1.50:5173/api/events" -> "http://192.168.1.50:5173/api/events"
+ */
+export function normalizeOfficeKitEndpoint(raw: string): string {
+  if (!raw || typeof raw !== 'string') return '';
+  let trimmed = raw.trim().replace(/\/+$/, '');
+  if (!trimmed) return '';
+
+  const hasProtocol = /^https?:\/\//i.test(trimmed);
+  if (!hasProtocol) {
+    // If no port specified and no path present, append default port 5173
+    if (!trimmed.includes(':') && !trimmed.includes('/')) {
+      trimmed = `${trimmed}:5173`;
+    }
+    trimmed = `http://${trimmed}`;
+  }
+
+  // Ensure trailing /api/events path
+  if (!trimmed.endsWith('/api/events')) {
+    if (trimmed.endsWith('/api')) {
+      trimmed = `${trimmed}/events`;
+    } else {
+      trimmed = `${trimmed}/api/events`;
+    }
+  }
+
+  return trimmed;
+}
+
+/**
+ * Returns prioritized candidate endpoints for Office Kit event transmission.
+ * Checks:
+ *  1. Explicit runtime customEndpoint override (if provided)
+ *  2. EXPO_PUBLIC_OFFICE_KIT_URL / EXPO_PUBLIC_OFFICE_KIT_HOST env vars (for physical device LAN Wi-Fi)
+ *  3. Default dev endpoints (localhost via ADB reverse + 10.0.2.2 emulator loopback)
+ */
+export function getOfficeKitEndpoints(customEndpoint?: string): string[] {
+  const endpoints: string[] = [];
+
+  if (customEndpoint) {
+    const normalized = normalizeOfficeKitEndpoint(customEndpoint);
+    if (normalized) endpoints.push(normalized);
+  }
+
+  const envUrl = process.env.EXPO_PUBLIC_OFFICE_KIT_URL || process.env.EXPO_PUBLIC_OFFICE_KIT_HOST;
+  if (envUrl) {
+    const normalizedEnv = normalizeOfficeKitEndpoint(envUrl);
+    if (normalizedEnv && !endpoints.includes(normalizedEnv)) {
+      endpoints.push(normalizedEnv);
+    }
+  }
+
+  for (const def of DEFAULT_OFFICE_KIT_ENDPOINTS) {
+    if (!endpoints.includes(def)) {
+      endpoints.push(def);
+    }
+  }
+
+  return endpoints;
+}
 
 /**
  * Derives a normalized deviceId and human-readable deviceName from runtime hardware metadata.
@@ -117,7 +183,7 @@ export async function broadcastToOfficeKit(
     `[LOCUS SYNC OUT] eventId=${payload.id} state=${payload.state} timestamp=${payload.timestamp} confidence=${payload.confidence} reason=${payload.reason} failedChecks=${payload.failedChecks.join(',')} isEnrichment=${payload.isEnrichment}`,
   );
 
-  const endpoints = customEndpoint ? [customEndpoint] : DEFAULT_OFFICE_KIT_ENDPOINTS;
+  const endpoints = getOfficeKitEndpoints(customEndpoint);
 
   for (const endpoint of endpoints) {
     try {

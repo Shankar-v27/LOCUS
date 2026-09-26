@@ -20,11 +20,14 @@ import { BottomBar } from '@/components/BottomBar';
 import { EventLog } from '@/components/EventLog';
 import { IntegrityPanel } from '@/components/IntegrityPanel';
 import { ModelStatus } from '@/components/ModelStatus';
+import { RuntimePanel } from '@/components/RuntimePanel';
 import { StatusStrip } from '@/components/StatusStrip';
 import { TapeGauge } from '@/components/TapeGauge';
 import { useRouter } from 'expo-router';
 import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useLocusPipeline } from '@/hooks/useLocusPipeline';
+import { useAdaptiveRuntime } from '@/hooks/useAdaptiveRuntime';
+import { formatBytesToGb, formatBatteryPct } from '@/services/adaptiveRuntimePolicy';
 import type { EventLogEntry } from '@/hooks/useLocusPipeline';
 import { useNetworkIntegrity, DIVERGENCE_LIMIT_KM } from '@/hooks/useNetworkIntegrity';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -59,7 +62,8 @@ function SectionHeader({ title, meta }: { title: string; meta?: string }) {
 
 export default function DashboardScreen() {
   const { decisions, loaded: permsLoaded } = usePermissions();
-  const pipeline = useLocusPipeline();
+  const adaptive = useAdaptiveRuntime();
+  const pipeline = useLocusPipeline({ autoEnrichAdvisory: adaptive.decision.autoEnrichAdvisory });
   const router = useRouter();
   const [searchOverlay, setSearchOverlay] = useState<SearchOverlayData | null>(null);
   const [reasonPanel, setReasonPanel] = useState(false);
@@ -105,9 +109,10 @@ export default function DashboardScreen() {
         reset();
       } else {
         setReasonPanel(true);
+        void pipeline.explainOnDemand();
       }
     },
-    [injectSpoof, reset],
+    [injectSpoof, reset, pipeline.explainOnDemand],
   );
   const voice = useVoiceCommands(sdk as LocusSDK, onCommand);
 
@@ -243,6 +248,15 @@ export default function DashboardScreen() {
             </Text>
           </View>
         ) : null}
+
+        {/* LOCUS RUNTIME — Adaptive Edge Workload Policy */}
+        <RuntimePanel
+          decision={adaptive.decision}
+          override={adaptive.override}
+          onSelectOverride={adaptive.setOverride}
+          memoryText={formatBytesToGb(adaptive.totalMemoryBytes)}
+          batteryText={formatBatteryPct(adaptive.batteryLevel)}
+        />
 
         {/* TELEMETRY */}
         {telemetry ? (
@@ -544,7 +558,10 @@ export default function DashboardScreen() {
         spoofing={pipeline.spoofing}
         onSpoof={injectSpoof}
         onReset={reset}
-        onShowReason={() => setReasonPanel(true)}
+        onShowReason={() => {
+          setReasonPanel(true);
+          void pipeline.explainOnDemand();
+        }}
         spoofDisabled={false}
       />
 
