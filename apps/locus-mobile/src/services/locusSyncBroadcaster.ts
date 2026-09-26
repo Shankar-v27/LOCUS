@@ -6,6 +6,7 @@
  *  - 100% fire-and-forget: failure to reach Office Kit never affects local RAIM
  *    evaluation, latency budget, or on-device AI operations.
  */
+import * as Device from 'expo-device';
 import type { EventLogEntry } from '@/hooks/useLocusPipeline';
 
 export interface LocusSyncPayload {
@@ -40,6 +41,43 @@ const DEFAULT_OFFICE_KIT_ENDPOINTS = [
 ];
 
 /**
+ * Derives a normalized deviceId and human-readable deviceName from runtime hardware metadata.
+ * Gracefully falls back if expo-device properties are null, empty, or unmocked.
+ */
+export function getDeviceIdentity(): { deviceId: string; deviceName: string } {
+  try {
+    const brand = (Device.brand || Device.manufacturer || '').trim();
+    const model = (Device.modelName || Device.designName || Device.productName || '').trim();
+
+    let rawName = '';
+    if (brand && model) {
+      rawName = model.toLowerCase().startsWith(brand.toLowerCase())
+        ? model
+        : `${brand} ${model}`;
+    } else if (model) {
+      rawName = model;
+    } else if (brand) {
+      rawName = brand;
+    } else {
+      rawName = 'Android Device';
+    }
+
+    // Normalize deviceId: e.g. "iQOO 15" -> "iqoo-15", "Pixel 8 Pro" -> "pixel-8-pro"
+    const normalizedId =
+      rawName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'field-node-01';
+
+    const displayName = `FIELD-UNIT (${rawName})`;
+
+    return { deviceId: normalizedId, deviceName: displayName };
+  } catch {
+    return { deviceId: 'field-node-01', deviceName: 'FIELD-UNIT (Android Device)' };
+  }
+}
+
+/**
  * Broadcast an authoritative LOCUS mobile event to the Office Kit console.
  * Silent on failure — never throws and never blocks the UI thread or state machine.
  */
@@ -58,10 +96,12 @@ export async function broadcastToOfficeKit(
       ? 0.15
       : 0.65;
 
+  const { deviceId, deviceName } = getDeviceIdentity();
+
   const payload: LocusSyncPayload = {
     id: entry.id,
-    deviceId: 'motorola-edge-50-fusion',
-    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
+    deviceId,
+    deviceName,
     source: 'REAL_DEVICE',
     timestamp: entry.timestamp || Date.now(),
     state: entry.state,
@@ -100,3 +140,4 @@ export async function broadcastToOfficeKit(
     }
   }
 }
+

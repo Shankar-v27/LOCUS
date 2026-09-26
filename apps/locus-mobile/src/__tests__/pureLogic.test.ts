@@ -4,6 +4,7 @@
  */
 import { cosineSimilarity } from '../lib/search';
 import { matchCommand, VOICE_COMMANDS } from '../hooks/useVoiceCommands';
+import { getDeviceIdentity } from '../services/locusSyncBroadcaster';
 
 describe('voice command matching', () => {
   it('knows the fixed command set', () => {
@@ -60,3 +61,14 @@ describe('cosine similarity ranking', () => {
     expect(ranked[ranked.length - 1].id).toBe(3);
   });
 });
+
+describe('device identity derivation', () => {
+  it('returns a valid normalized deviceId and displayName', () => {
+    const identity = getDeviceIdentity();
+    expect(typeof identity.deviceId).toBe('string');
+    expect(identity.deviceId.length).toBeGreaterThan(0);
+    expect(identity.deviceId).toMatch(/^[a-z0-9-]+$/);
+    expect(identity.deviceName.startsWith('FIELD-UNIT')).toBe(true);
+  });
+});
+

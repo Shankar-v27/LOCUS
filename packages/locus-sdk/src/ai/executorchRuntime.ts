@@ -15,6 +15,9 @@
  *  - Model downloads surface real progress (fraction 0..1 straight from the
  *    resource fetcher) through subscribeModelDownloads — the UI renders this;
  *    nothing is simulated.
+ *  - Cache Invalidation & Diagnostics: Detailed logging at each lifecycle stage
+ *    (enqueue, download start/progress/complete, cache hit/miss, init start/success/error)
+ *    with automatic cache cleanup upon corrupted resource load failures.
  */
 
 import type {
@@ -37,9 +40,23 @@ export interface ModelDownloadState {
   progress: number;
   /** True once the model is loaded and callable. */
   ready: boolean;
+  /** Error message if loading/downloading failed. */
+  error?: string | null;
 }
 
 let initialized = false;
+
+function aiLog(message: string): void {
+  console.log(`[LOCUS AI] ${message}`);
+}
+
+function aiError(message: string, error?: unknown): void {
+  if (error instanceof Error) {
+    console.error(`[LOCUS AI ERROR] ${message} -> ${error.name}: ${error.message}\n${error.stack || ''}`);
+  } else {
+    console.error(`[LOCUS AI ERROR] ${message} -> ${String(error)}`);
+  }
+}
 
 /** Wires the Expo resource fetcher once; idempotent. */
 async function ensureInitialized(): Promise<void> {
@@ -48,12 +65,28 @@ async function ensureInitialized(): Promise<void> {
   // bindings at module import time, so a static import would crash every
   // environment without the native module (jest, plain Node) and would eager-
   // load at SDK import, defeating the lazy-startup guarantee.
+  aiLog('Initializing ExecuTorch runtime with ExpoResourceFetcher...');
   const [{ ExpoResourceFetcher }, executorch] = await Promise.all([
     import('react-native-executorch-expo-resource-fetcher'),
     import('react-native-executorch'),
   ]);
   executorch.initExecutorch({ resourceFetcher: ExpoResourceFetcher });
   initialized = true;
+  aiLog('ExecuTorch runtime initialized successfully.');
+}
+
+/** Invalidate cached files for given resource sources if a model load fails due to file corruption. */
+async function invalidateSources(sources: Array<string | undefined | null>): Promise<void> {
+  try {
+    const validSources = sources.filter((s): s is string => typeof s === 'string' && s.length > 0);
+    if (validSources.length === 0) return;
+    const { ExpoResourceFetcher } = await import('react-native-executorch-expo-resource-fetcher');
+    aiLog(`Invalidating potential corrupt cache files for sources: ${validSources.join(', ')}`);
+    await ExpoResourceFetcher.deleteResources(...validSources);
+    aiLog('Corrupt cache invalidation complete.');
+  } catch (err) {
+    aiError('Failed to invalidate cache sources', err);
+  }
 }
 
 // --- Serialized Download Queue & Retry ---------------------------------------
@@ -77,20 +110,33 @@ function cachedWithQueue<T>(
   slot: { promise: Promise<T> | null },
   task: ModelTask,
   loadFn: () => Promise<T>,
+  cleanupSources: () => Array<string | undefined | null>,
   maxRetries = 2,
 ): Promise<T> {
-  if (slot.promise) return slot.promise;
+  if (slot.promise) {
+    aiLog(`Task '${task}' already requested; returning cached promise.`);
+    return slot.promise;
+  }
 
+  aiLog(`Enqueuing model task '${task}' in download/load queue.`);
   slot.promise = queue
     .enqueue(async () => {
       let lastError: unknown;
       for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
         try {
-          return await loadFn();
+          aiLog(`Task '${task}' starting execution (attempt ${attempt}/${maxRetries + 1})...`);
+          const result = await loadFn();
+          aiLog(`Task '${task}' succeeded on attempt ${attempt}.`);
+          return result;
         } catch (error) {
           lastError = error;
+          aiError(`Task '${task}' failed on attempt ${attempt}/${maxRetries + 1}`, error);
+          // Invalidate cache before retry to clear corrupted downloads
+          await invalidateSources(cleanupSources());
           if (attempt <= maxRetries) {
-            await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+            const backoffMs = 1500 * attempt;
+            aiLog(`Task '${task}' retrying in ${backoffMs} ms...`);
+            await new Promise((resolve) => setTimeout(resolve, backoffMs));
           }
         }
       }
@@ -98,6 +144,7 @@ function cachedWithQueue<T>(
     })
     .catch((error: unknown) => {
       slot.promise = null;
+      emitDownload(task, { error: error instanceof Error ? error.message : String(error) });
       throw error;
     });
 
@@ -151,71 +198,109 @@ const embeddingsSlot: { promise: Promise<TextEmbeddingsModule> | null } = { prom
  * the demo requires while keeping the accuracy the constrained prompt needs.
  */
 export function loadLlm(): Promise<LLMModule> {
-  return cachedWithQueue(llmSlot, 'llm', async () => {
-    await ensureInitialized();
-    const executorch = await import('react-native-executorch');
-    const instance = await executorch.LLMModule.fromModelName(
-      executorch.models.llm.qwen3_0_6b(),
-      (progress: number) => emitDownload('llm', { progress }),
-    );
-    emitDownload('llm', { progress: 1, ready: true });
-    return instance;
-  });
+  let modelConfig: any = null;
+  return cachedWithQueue(
+    llmSlot,
+    'llm',
+    async () => {
+      await ensureInitialized();
+      const executorch = await import('react-native-executorch');
+      modelConfig = executorch.models.llm.qwen3_0_6b();
+      aiLog(`Loading LLM '${modelConfig.modelName}' from ${modelConfig.modelSource}...`);
+      const instance = await executorch.LLMModule.fromModelName(
+        modelConfig,
+        (progress: number) => {
+          aiLog(`LLM download progress: ${(progress * 100).toFixed(1)}%`);
+          emitDownload('llm', { progress, error: null });
+        },
+      );
+      aiLog(`LLM '${modelConfig.modelName}' initialized and ready.`);
+      emitDownload('llm', { progress: 1, ready: true, error: null });
+      return instance;
+    },
+    () => [modelConfig?.modelSource, modelConfig?.tokenizerSource, modelConfig?.tokenizerConfigSource],
+  );
 }
 
 /** Whisper base.en (English-only, 16 kHz mono input). */
 export function loadSpeechToText(): Promise<SpeechToTextModule> {
-  return cachedWithQueue(sttSlot, 'speechToText', async () => {
-    await ensureInitialized();
-    const executorch = await import('react-native-executorch');
-    const instance = await executorch.SpeechToTextModule.fromModelName(
-      executorch.models.speech_to_text.whisper_base_en(),
-      undefined,
-      (progress: number) => emitDownload('speechToText', { progress }),
-    );
-    emitDownload('speechToText', { progress: 1, ready: true });
-    return instance;
-  });
+  let modelConfig: any = null;
+  return cachedWithQueue(
+    sttSlot,
+    'speechToText',
+    async () => {
+      await ensureInitialized();
+      const executorch = await import('react-native-executorch');
+      modelConfig = executorch.models.speech_to_text.whisper_base_en();
+      aiLog(`Loading STT '${modelConfig.modelName}' from ${modelConfig.modelSource}...`);
+      const instance = await executorch.SpeechToTextModule.fromModelName(
+        modelConfig,
+        undefined,
+        (progress: number) => {
+          aiLog(`STT download progress: ${(progress * 100).toFixed(1)}%`);
+          emitDownload('speechToText', { progress, error: null });
+        },
+      );
+      aiLog(`STT '${modelConfig.modelName}' initialized and ready.`);
+      emitDownload('speechToText', { progress: 1, ready: true, error: null });
+      return instance;
+    },
+    () => [modelConfig?.modelSource, modelConfig?.tokenizerSource],
+  );
 }
 
 /** all-mpnet-base-v2 pooled sentence embeddings (768-d). */
 export function loadTextEmbeddings(): Promise<TextEmbeddingsModule> {
-  return cachedWithQueue(embeddingsSlot, 'textEmbeddings', async () => {
-    await ensureInitialized();
-    const executorch = await import('react-native-executorch');
-    const instance = await executorch.TextEmbeddingsModule.fromModelName(
-      executorch.models.text_embedding.all_mpnet_base_v2(),
-      (progress: number) => emitDownload('textEmbeddings', { progress }),
-    );
-    emitDownload('textEmbeddings', { progress: 1, ready: true });
-    return instance;
-  });
+  let modelConfig: any = null;
+  return cachedWithQueue(
+    embeddingsSlot,
+    'textEmbeddings',
+    async () => {
+      await ensureInitialized();
+      const executorch = await import('react-native-executorch');
+      modelConfig = executorch.models.text_embedding.all_mpnet_base_v2();
+      aiLog(`Loading Embeddings '${modelConfig.modelName}' from ${modelConfig.modelSource}...`);
+      const instance = await executorch.TextEmbeddingsModule.fromModelName(
+        modelConfig,
+        (progress: number) => {
+          aiLog(`Embeddings download progress: ${(progress * 100).toFixed(1)}%`);
+          emitDownload('textEmbeddings', { progress, error: null });
+        },
+      );
+      aiLog(`Embeddings '${modelConfig.modelName}' initialized and ready.`);
+      emitDownload('textEmbeddings', { progress: 1, ready: true, error: null });
+      return instance;
+    },
+    () => [modelConfig?.modelSource, modelConfig?.tokenizerSource],
+  );
 }
 
 /** Pre-warm used by LocusProvider; loads models sequentially to prevent socket exhaustion. */
 export function preloadModels(options: PreloadOptions = {}): void {
   const { llm = true, speechToText = true, textEmbeddings = true } = options;
+  aiLog(`Starting preload sequence (llm=${llm}, speechToText=${speechToText}, textEmbeddings=${textEmbeddings})`);
   (async () => {
     if (llm) {
       try {
         await loadLlm();
-      } catch {
-        // Errors caught here so remaining models can preload; explicit calls will re-throw
+      } catch (err) {
+        aiError('Preload for LLM failed; continuing with remaining models', err);
       }
     }
     if (speechToText) {
       try {
         await loadSpeechToText();
-      } catch {
-        // Errors caught here
+      } catch (err) {
+        aiError('Preload for STT failed; continuing with remaining models', err);
       }
     }
     if (textEmbeddings) {
       try {
         await loadTextEmbeddings();
-      } catch {
-        // Errors caught here
+      } catch (err) {
+        aiError('Preload for TextEmbeddings failed', err);
       }
     }
+    aiLog('Preload sequence completed.');
   })();
 }
