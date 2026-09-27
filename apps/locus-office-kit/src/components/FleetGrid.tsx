@@ -102,19 +102,31 @@ export const FleetGrid: React.FC<FleetGridProps> = ({
                 <div style={styles.telemetryGrid}>
                   <div style={styles.telCell}>
                     <span style={styles.telLabel}>SPEED</span>
-                    <span style={styles.telVal}>{t.speedMps.toFixed(1)} m/s</span>
+                    <span style={styles.telVal}>
+                      {typeof t.speedMps === 'number' ? `${t.speedMps.toFixed(1)} m/s` : '--'}
+                    </span>
                   </div>
                   <div style={styles.telCell}>
                     <span style={styles.telLabel}>ALTITUDE</span>
-                    <span style={styles.telVal}>{t.altitudeMeters.toFixed(1)} m</span>
+                    <span style={styles.telVal}>
+                      {typeof t.altitudeMeters === 'number' ? `${t.altitudeMeters.toFixed(1)} m` : '--'}
+                    </span>
                   </div>
                   <div style={styles.telCell}>
                     <span style={styles.telLabel}>SATS</span>
-                    <span style={styles.telVal}>{t.satellites} SV</span>
+                    <span style={styles.telVal}>
+                      {t.satellites ?? (t as any).fixSatellites ?? '--'} SV
+                    </span>
                   </div>
                   <div style={styles.telCell}>
                     <span style={styles.telLabel}>MEAN C/N0</span>
-                    <span style={styles.telVal}>{t.cn0Mean.toFixed(1)} dB-Hz</span>
+                    <span style={styles.telVal}>
+                      {typeof t.cn0Mean === 'number'
+                        ? `${t.cn0Mean.toFixed(1)} dB-Hz`
+                        : typeof (t as any).cnoMean === 'number'
+                        ? `${(t as any).cnoMean.toFixed(1)} dB-Hz`
+                        : '--'}
+                    </span>
                   </div>
                 </div>
               )}

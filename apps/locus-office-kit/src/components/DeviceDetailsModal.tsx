@@ -110,35 +110,67 @@ export const DeviceDetailsModal: React.FC<DeviceDetailsModalProps> = ({
                 <div style={styles.telGrid}>
                   <div style={styles.telItem}>
                     <span style={styles.telLabel}>LATITUDE</span>
-                    <span style={styles.telValue}>{t.latitude.toFixed(5)}°</span>
+                    <span style={styles.telValue}>
+                      {typeof t.latitude === 'number' ? `${t.latitude.toFixed(5)}°` : '--'}
+                    </span>
                   </div>
                   <div style={styles.telItem}>
                     <span style={styles.telLabel}>LONGITUDE</span>
-                    <span style={styles.telValue}>{t.longitude.toFixed(5)}°</span>
+                    <span style={styles.telValue}>
+                      {typeof t.longitude === 'number' ? `${t.longitude.toFixed(5)}°` : '--'}
+                    </span>
                   </div>
                   <div style={styles.telItem}>
                     <span style={styles.telLabel}>ALTITUDE</span>
-                    <span style={styles.telValue}>{t.altitudeMeters.toFixed(1)} m</span>
+                    <span style={styles.telValue}>
+                      {typeof t.altitudeMeters === 'number'
+                        ? `${t.altitudeMeters.toFixed(1)} m`
+                        : typeof (t as any).altitude === 'number'
+                        ? `${(t as any).altitude.toFixed(1)} m`
+                        : '--'}
+                    </span>
                   </div>
                   <div style={styles.telItem}>
                     <span style={styles.telLabel}>SPEED</span>
-                    <span style={styles.telValue}>{t.speedMps.toFixed(1)} m/s</span>
+                    <span style={styles.telValue}>
+                      {typeof t.speedMps === 'number'
+                        ? `${t.speedMps.toFixed(1)} m/s`
+                        : typeof (t as any).speed === 'number'
+                        ? `${(t as any).speed.toFixed(1)} m/s`
+                        : '--'}
+                    </span>
                   </div>
                   <div style={styles.telItem}>
                     <span style={styles.telLabel}>HEADING</span>
-                    <span style={styles.telValue}>{t.headingDeg.toFixed(0)}°</span>
+                    <span style={styles.telValue}>
+                      {typeof t.headingDeg === 'number'
+                        ? `${t.headingDeg.toFixed(0)}°`
+                        : typeof (t as any).heading === 'number'
+                        ? `${(t as any).heading.toFixed(0)}°`
+                        : '--'}
+                    </span>
                   </div>
                   <div style={styles.telItem}>
                     <span style={styles.telLabel}>SATELLITES</span>
-                    <span style={styles.telValue}>{t.satellites} SV</span>
+                    <span style={styles.telValue}>
+                      {t.satellites ?? (t as any).fixSatellites ?? '--'} SV
+                    </span>
                   </div>
                   <div style={styles.telItem}>
                     <span style={styles.telLabel}>MEAN C/N0</span>
-                    <span style={styles.telValue}>{t.cn0Mean.toFixed(1)} dB-Hz</span>
+                    <span style={styles.telValue}>
+                      {typeof t.cn0Mean === 'number'
+                        ? `${t.cn0Mean.toFixed(1)} dB-Hz`
+                        : typeof (t as any).cnoMean === 'number'
+                        ? `${(t as any).cnoMean.toFixed(1)} dB-Hz`
+                        : '--'}
+                    </span>
                   </div>
                   <div style={styles.telItem}>
                     <span style={styles.telLabel}>HDOP</span>
-                    <span style={styles.telValue}>{t.hdop.toFixed(1)}</span>
+                    <span style={styles.telValue}>
+                      {typeof t.hdop === 'number' ? t.hdop.toFixed(1) : '--'}
+                    </span>
                   </div>
                 </div>
               ) : (
