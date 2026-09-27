@@ -57,6 +57,11 @@ jest.mock('expo-haptics', () => ({
   NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
 }));
 
+jest.mock('expo-battery', () => ({
+  getBatteryLevelAsync: jest.fn(async () => 0.85),
+  addBatteryLevelListener: jest.fn(() => ({ remove: jest.fn() })),
+}));
+
 // Sensor acquisition boundary only — physics/checks/state machine stay real.
 // AsyncStorage native module absent in Jest.
 jest.mock('@react-native-async-storage/async-storage', () => ({

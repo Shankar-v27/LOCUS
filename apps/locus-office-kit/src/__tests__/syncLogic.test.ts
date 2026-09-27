@@ -3,21 +3,48 @@ import { LocusIntegrityEvent } from '../types/locusSync';
 
 function runTests() {
   console.log('[TEST] Starting comprehensive STEP 11 LOCUS Office Kit synchronization unit tests...');
-  const devId = 'motorola-edge-50-fusion';
+  const devId = 'live-field-unit-01';
+  const devName = 'FIELD-UNIT-01 (GNSS Cockpit)';
   const baseTime = Date.now();
 
-  // TEST 1: Initial state & TRUSTED -> DENIED
+  // TEST 0: Initial seed state contains only simulated fleet (no fake Motorola)
   syncService.resetAll();
   let devices = syncService.getDevices();
-  let dev = devices.find((d) => d.id === devId);
-  if (dev?.state !== 'TRUSTED') {
-    throw new Error(`Test 1 Failed: Expected initial state TRUSTED, got ${dev?.state}`);
+  if (devices.length !== 2) {
+    throw new Error(`Test 0 Failed: Expected 2 initial simulated devices, got ${devices.length}`);
   }
+  const realCount = devices.filter((d) => d.source === 'REAL_DEVICE').length;
+  if (realCount !== 0) {
+    throw new Error(`Test 0 Failed: Expected 0 initial REAL_DEVICE nodes, got ${realCount}`);
+  }
+  console.log('✓ TEST 0 Passed: Initial seed fleet contains only simulated nodes (0 fake hardware nodes).');
 
+  // TEST 1: Dynamic registration of real mobile device on first event
+  const initialTrustedEvent: LocusIntegrityEvent = {
+    id: 199,
+    deviceId: devId,
+    deviceName: devName,
+    source: 'REAL_DEVICE',
+    timestamp: baseTime,
+    state: 'TRUSTED',
+    confidence: 0.98,
+    reason: 'all checks passed',
+    failedChecks: [],
+    explanation: null,
+  };
+  syncService.ingestRemoteEvent(initialTrustedEvent);
+  devices = syncService.getDevices();
+  let dev = devices.find((d) => d.id === devId);
+  if (!dev || dev.source !== 'REAL_DEVICE' || dev.state !== 'TRUSTED') {
+    throw new Error(`Test 1 Failed: Dynamic device registration failed, got ${JSON.stringify(dev)}`);
+  }
+  console.log('✓ TEST 1 Passed: Real mobile device dynamically registered with REAL_DEVICE source.');
+
+  // TEST 1b: State transition TRUSTED -> DENIED
   const deniedEvent: LocusIntegrityEvent = {
     id: 200,
     deviceId: devId,
-    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
+    deviceName: devName,
     source: 'REAL_DEVICE',
     timestamp: baseTime + 1000,
     state: 'DENIED',
@@ -29,15 +56,15 @@ function runTests() {
   syncService.ingestRemoteEvent(deniedEvent);
   dev = syncService.getDevices().find((d) => d.id === devId);
   if (dev?.state !== 'DENIED') {
-    throw new Error(`Test 1 Failed: Expected state DENIED, got ${dev?.state}`);
+    throw new Error(`Test 1b Failed: Expected state DENIED, got ${dev?.state}`);
   }
-  console.log('✓ TEST 1 Passed: TRUSTED -> DENIED (Office Kit shows DENIED).');
+  console.log('✓ TEST 1b Passed: TRUSTED -> DENIED (Office Kit shows DENIED).');
 
   // TEST 2: TRUSTED -> DENIED -> RECOVERING
   const recoveringEvent: LocusIntegrityEvent = {
     id: 201,
     deviceId: devId,
-    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
+    deviceName: devName,
     source: 'REAL_DEVICE',
     timestamp: baseTime + 2000,
     state: 'RECOVERING',
@@ -57,7 +84,7 @@ function runTests() {
   const trustedEvent: LocusIntegrityEvent = {
     id: 202,
     deviceId: devId,
-    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
+    deviceName: devName,
     source: 'REAL_DEVICE',
     timestamp: baseTime + 3000,
     state: 'TRUSTED',
@@ -115,7 +142,7 @@ function runTests() {
   const staleDegradedEvent: LocusIntegrityEvent = {
     id: 150, // older than 202
     deviceId: devId,
-    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
+    deviceName: devName,
     source: 'REAL_DEVICE',
     timestamp: baseTime + 500, // older than 3000
     state: 'DEGRADED',
@@ -135,7 +162,7 @@ function runTests() {
   const genuineDegradedEvent: LocusIntegrityEvent = {
     id: 203,
     deviceId: devId,
-    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
+    deviceName: devName,
     source: 'REAL_DEVICE',
     timestamp: baseTime + 4000,
     state: 'DEGRADED',
@@ -168,7 +195,7 @@ function runTests() {
   const finalTrustedEvent: LocusIntegrityEvent = {
     id: 204,
     deviceId: devId,
-    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
+    deviceName: devName,
     source: 'REAL_DEVICE',
     timestamp: baseTime + 5000,
     state: 'TRUSTED',

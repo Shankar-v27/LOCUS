@@ -12,31 +12,6 @@ const SYNC_CHANNEL_NAME = 'locus_fleet_sync';
 
 export const INITIAL_DEVICES: LocusDevice[] = [
   {
-    id: 'motorola-edge-50-fusion',
-    name: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
-    callsign: 'VIPER-1',
-    model: 'Motorola Edge 50 Fusion (API 34)',
-    source: 'REAL_DEVICE',
-    state: 'TRUSTED',
-    confidence: 0.98,
-    lastSeen: 0,
-    syncStatus: 'ONLINE',
-    batteryPct: 87,
-    aiReady: true,
-    latestTelemetry: {
-      latitude: 37.4220,
-      longitude: -122.0841,
-      altitudeMeters: 45.2,
-      speedMps: 1.4,
-      headingDeg: 124,
-      satellites: 14,
-      cn0Mean: 34.2,
-      hdop: 0.8,
-      baroPressureHpa: 1013.25,
-      isVpnActive: false,
-    },
-  },
-  {
     id: 'drone-alpha-sim',
     name: 'DRONE-ALPHA (Autonomous UAV)',
     callsign: 'HAWK-7',
@@ -90,20 +65,6 @@ export const INITIAL_DEVICES: LocusDevice[] = [
 
 export const INITIAL_EVENTS: LocusIntegrityEvent[] = [
   {
-    id: 'init-real-1',
-    deviceId: 'motorola-edge-50-fusion',
-    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
-    source: 'REAL_DEVICE',
-    timestamp: Date.now() - 60000,
-    state: 'TRUSTED',
-    confidence: 0.98,
-    reason: 'all checks passed',
-    failedChecks: [],
-    explanation:
-      'Position is verified across Doppler kinematic velocity, multi-satellite C/N0 distribution, barometric altitude variance, and NOAA solar azimuth alignment.',
-    telemetry: INITIAL_DEVICES[0].latestTelemetry,
-  },
-  {
     id: 'init-sim-1',
     deviceId: 'drone-alpha-sim',
     deviceName: 'DRONE-ALPHA (Autonomous UAV)',
@@ -115,7 +76,7 @@ export const INITIAL_EVENTS: LocusIntegrityEvent[] = [
     failedChecks: [],
     explanation:
       'Airborne flight vector is consistent with GNSS pseudorange Doppler drift and IMU angular rate integration.',
-    telemetry: INITIAL_DEVICES[1].latestTelemetry,
+    telemetry: INITIAL_DEVICES[0].latestTelemetry,
   },
 ];
 
