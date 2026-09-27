@@ -23,7 +23,7 @@ import type {
 import { createLocusSDK } from 'locus-sdk';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { broadcastToOfficeKit } from '@/services/locusSyncBroadcaster';
+import { broadcastToOfficeKit, broadcastHeartbeatToOfficeKit } from '@/services/locusSyncBroadcaster';
 
 export const WINDOW_FIX_CAP = 12;
 export const WINDOW_IMU_CAP = 60;
@@ -339,6 +339,61 @@ export function useLocusPipeline(options?: LocusPipelineOptions) {
     };
     poll();
     const id = setInterval(poll, 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Periodic Office Kit sync / registration heartbeat (every 5 seconds)
+  // Ensures physical device registration and telemetry remain live in Office Kit
+  // even without state transitions or if Office Kit was started after the mobile app.
+  useEffect(() => {
+    console.log('[PIPELINE] startup: initiating 5s Office Kit heartbeat interval');
+    const sendHeartbeat = () => {
+      console.log('[PIPELINE] heartbeat triggered at', Date.now());
+      const currentVerdict = verdictRef.current;
+      const lastFix = fixesRef.current[fixesRef.current.length - 1];
+      const lastEpoch = gnssRef.current[gnssRef.current.length - 1];
+      const lastBaro = baroRef.current[baroRef.current.length - 1];
+
+      const state = currentVerdict ? currentVerdict.state : 'TRUSTED';
+      const confidence = currentVerdict ? currentVerdict.confidence : 0.98;
+      const reason = currentVerdict ? currentVerdict.reason : 'all checks passed';
+      const failedChecks = currentVerdict ? currentVerdict.failedChecks : [];
+
+      const telemSnapshot = lastFix
+        ? {
+            latitude: lastFix.latitude,
+            longitude: lastFix.longitude,
+            altitudeMeters: lastFix.altitude,
+            speedMps: lastFix.speed,
+            headingDeg: lastFix.bearing,
+            satellites: lastEpoch ? lastEpoch.satellites.length : 0,
+            cn0Mean:
+              lastEpoch && lastEpoch.satellites.length > 0
+                ? lastEpoch.satellites.reduce((sum, s) => sum + (s.cn0DbHz ?? 0), 0) /
+                  lastEpoch.satellites.length
+                : 0,
+            hdop: Number.isFinite(lastFix.accuracy) ? lastFix.accuracy / 5 : 1.0,
+            baroPressureHpa: lastBaro ? lastBaro.pressureHpa : undefined,
+            isVpnActive: vpnActiveRef.current ?? false,
+          }
+        : undefined;
+
+      broadcastHeartbeatToOfficeKit({
+        state,
+        confidence,
+        reason,
+        failedChecks,
+        telemetry: telemSnapshot,
+      }).catch((err) => {
+        console.log('[PIPELINE] broadcastHeartbeatToOfficeKit unhandled error:', String(err));
+      });
+    };
+
+    // Immediate initial registration broadcast on pipeline startup
+    sendHeartbeat();
+
+    // And repeat every 5000ms
+    const id = setInterval(sendHeartbeat, 5000);
     return () => clearInterval(id);
   }, []);
 

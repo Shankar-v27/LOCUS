@@ -57,6 +57,7 @@
       "typedRoutes": true
     },
     "extra": {
+      "officeKitUrl": "http://10.2.36.100:5173",
       "router": {},
       "eas": {
         "projectId": "0dc6739c-4d27-4709-9693-13d29dba3de2"
