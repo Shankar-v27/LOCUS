@@ -12,31 +12,6 @@ const SYNC_CHANNEL_NAME = 'locus_fleet_sync';
 
 export const INITIAL_DEVICES: LocusDevice[] = [
   {
-    id: 'motorola-edge-50-fusion',
-    name: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
-    callsign: 'VIPER-1',
-    model: 'Motorola Edge 50 Fusion (API 34)',
-    source: 'REAL_DEVICE',
-    state: 'TRUSTED',
-    confidence: 0.98,
-    lastSeen: 0,
-    syncStatus: 'ONLINE',
-    batteryPct: 87,
-    aiReady: true,
-    latestTelemetry: {
-      latitude: 37.4220,
-      longitude: -122.0841,
-      altitudeMeters: 45.2,
-      speedMps: 1.4,
-      headingDeg: 124,
-      satellites: 14,
-      cn0Mean: 34.2,
-      hdop: 0.8,
-      baroPressureHpa: 1013.25,
-      isVpnActive: false,
-    },
-  },
-  {
     id: 'drone-alpha-sim',
     name: 'DRONE-ALPHA (Autonomous UAV)',
     callsign: 'HAWK-7',
@@ -90,20 +65,6 @@ export const INITIAL_DEVICES: LocusDevice[] = [
 
 export const INITIAL_EVENTS: LocusIntegrityEvent[] = [
   {
-    id: 'init-real-1',
-    deviceId: 'motorola-edge-50-fusion',
-    deviceName: 'FIELD-UNIT-01 (Motorola Edge 50 Fusion)',
-    source: 'REAL_DEVICE',
-    timestamp: Date.now() - 60000,
-    state: 'TRUSTED',
-    confidence: 0.98,
-    reason: 'all checks passed',
-    failedChecks: [],
-    explanation:
-      'Position is verified across Doppler kinematic velocity, multi-satellite C/N0 distribution, barometric altitude variance, and NOAA solar azimuth alignment.',
-    telemetry: INITIAL_DEVICES[0].latestTelemetry,
-  },
-  {
     id: 'init-sim-1',
     deviceId: 'drone-alpha-sim',
     deviceName: 'DRONE-ALPHA (Autonomous UAV)',
@@ -115,7 +76,7 @@ export const INITIAL_EVENTS: LocusIntegrityEvent[] = [
     failedChecks: [],
     explanation:
       'Airborne flight vector is consistent with GNSS pseudorange Doppler drift and IMU angular rate integration.',
-    telemetry: INITIAL_DEVICES[1].latestTelemetry,
+    telemetry: INITIAL_DEVICES[0].latestTelemetry,
   },
 ];
 
@@ -134,8 +95,102 @@ class SyncService {
 
   constructor() {
     this.loadState();
+    this.bootstrapFromServer();
     this.initBroadcastChannel();
     this.initSseStream();
+  }
+
+  public async bootstrapFromServer(payloadOverride?: unknown): Promise<void> {
+    let data: any = payloadOverride;
+    if (data === undefined && typeof window !== 'undefined' && 'fetch' in window) {
+      try {
+        const res = await fetch('/api/fleet');
+        if (res.ok) {
+          data = await res.json();
+        }
+      } catch (err) {
+        console.warn('[BOOTSTRAP] fetch /api/fleet failed:', err);
+      }
+    }
+
+    if (!data) return;
+
+    console.log('[BOOTSTRAP] GET /api/fleet response', data);
+
+    const parsedDevices: LocusDevice[] = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.devices)
+      ? data.devices
+      : Array.isArray(data?.fleet)
+      ? data.fleet
+      : [];
+
+    const realParsedCount = parsedDevices.filter((d) => d.source === 'REAL_DEVICE').length;
+    const iqooParsed = parsedDevices.find((d) => d.id === 'iqoo-15');
+
+    console.log('[BOOTSTRAP] parsed device count', parsedDevices.length);
+    console.log('[BOOTSTRAP] parsed REAL_DEVICE count', realParsedCount);
+    console.log('[BOOTSTRAP] iqoo-15 record', iqooParsed);
+
+    if (parsedDevices.length > 0) {
+      const preservedReal = this.devices.filter(
+        (d) => d.source === 'REAL_DEVICE' && !parsedDevices.some((p) => p.id === d.id),
+      );
+      this.devices = [...parsedDevices, ...preservedReal];
+    }
+
+    const parsedEvents: LocusIntegrityEvent[] = Array.isArray(data?.events)
+      ? data.events
+      : [];
+    if (parsedEvents.length > 0) {
+      this.events = parsedEvents;
+    }
+
+    const currentRealCount = this.devices.filter((d) => d.source === 'REAL_DEVICE').length;
+    const currentIqoo = this.devices.find((d) => d.id === 'iqoo-15');
+
+    console.log('[SYNC STATE] devices after bootstrap', this.devices.length);
+    console.log('[SYNC STATE] REAL count', currentRealCount);
+    console.log('[SYNC STATE] iqoo state', currentIqoo?.state);
+
+    this.notify();
+  }
+
+  public handleSseMessage(data: { type: string; payload?: any }) {
+    if (!data) return;
+    if (data.type === 'SNAPSHOT' && data.payload) {
+      const payload = data.payload;
+      const snapshotDevices: LocusDevice[] = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.devices)
+        ? payload.devices
+        : Array.isArray(payload?.fleet)
+        ? payload.fleet
+        : [];
+
+      console.log(
+        '[LOCUS SSE] snapshot received:',
+        snapshotDevices.length,
+        'devices,',
+        payload?.events?.length ?? 0,
+        'events',
+      );
+
+      if (snapshotDevices.length > 0) {
+        // TEST 29: SSE SNAPSHOT after bootstrap does not reset devices back to only simulated nodes
+        const preservedReal = this.devices.filter(
+          (d) => d.source === 'REAL_DEVICE' && !snapshotDevices.some((s) => s.id === d.id),
+        );
+        this.devices = [...snapshotDevices, ...preservedReal];
+      }
+      if (Array.isArray(payload?.events)) {
+        this.events = payload.events;
+      }
+      this.notify();
+    } else if (data.type === 'LOCUS_EVENT' && data.payload) {
+      console.log('[LOCUS SSE] event received:', data.payload.deviceId, '->', data.payload.state);
+      this.ingestRemoteEvent(data.payload);
+    }
   }
 
   private initBroadcastChannel() {
@@ -165,10 +220,7 @@ class SyncService {
         this.sseEventSource.onmessage = (e) => {
           try {
             const data = JSON.parse(e.data);
-            if (data.type === 'LOCUS_EVENT' && data.payload) {
-              console.log('[LOCUS SSE] event received:', data.payload.deviceId, '->', data.payload.state);
-              this.ingestRemoteEvent(data.payload);
-            }
+            this.handleSseMessage(data);
           } catch {
             // Ignore malformed SSE frames
           }
@@ -276,24 +328,36 @@ class SyncService {
     const source: DeviceSource = event.source || 'REAL_DEVICE';
     const cleanEvent: LocusIntegrityEvent = { ...event, source };
 
-    // Check if this is an asynchronous enrichment of a previously logged event (e.g. Qwen explanation resolving)
+    const isHeartbeat = cleanEvent.isHeartbeat === true;
+    const isEnrichment = cleanEvent.isEnrichment === true;
     const existingEventIndex = this.events.findIndex((e) => e.id === cleanEvent.id);
-    const isEnrichmentUpdate = cleanEvent.isEnrichment === true || existingEventIndex >= 0;
+
+    console.log(
+      '[OFFICE_KIT] ingestRemoteEvent:',
+      cleanEvent.deviceId,
+      cleanEvent.state,
+      'isHeartbeat=',
+      isHeartbeat,
+      'isEnrichment=',
+      isEnrichment,
+    );
 
     if (existingEventIndex >= 0) {
       this.events[existingEventIndex] = cleanEvent;
-    } else {
+    } else if (!isHeartbeat) {
       this.events = [cleanEvent, ...this.events];
     }
 
     // Find existing device or dynamically register new device
     const existingIndex = this.devices.findIndex((d) => d.id === cleanEvent.deviceId);
+    console.log('[OFFICE_KIT] existing device?', existingIndex >= 0);
+
     if (existingIndex >= 0) {
       const dev = this.devices[existingIndex];
 
       // If this is purely an enrichment update for an older event, update the incident reference if it matches,
       // but DO NOT roll back the active device state to an old event's state!
-      if (isEnrichmentUpdate) {
+      if (isEnrichment) {
         console.log(
           `[LOCUS AI ENRICHMENT] eventId=${cleanEvent.id} originalState=${cleanEvent.state} originalTimestamp=${cleanEvent.timestamp} newExplanation=true`,
         );
@@ -313,15 +377,20 @@ class SyncService {
         return;
       }
 
-      // Monotonic sequence verification: only accept state events with higher event IDs or newer timestamps
+      // Check for stale event
       const eventTs = cleanEvent.timestamp || Date.now();
       let isMonotonic = true;
-      if (dev.latestStateEventId !== undefined) {
-        if (typeof cleanEvent.id === 'number' && typeof dev.latestStateEventId === 'number') {
-          // Accept if higher sequence ID or noticeably newer timestamp (e.g. after phone reset / reconnection)
-          isMonotonic = cleanEvent.id > dev.latestStateEventId || eventTs > dev.lastSeen + 1500;
-        } else {
-          isMonotonic = eventTs >= dev.lastSeen;
+      if (!isHeartbeat) {
+        if (
+          dev.latestStateEventId !== undefined &&
+          typeof cleanEvent.id === 'number' &&
+          typeof dev.latestStateEventId === 'number'
+        ) {
+          if (cleanEvent.id < dev.latestStateEventId) {
+            isMonotonic = false;
+          }
+        } else if (dev.lastSeen && eventTs < dev.lastSeen - 10000) {
+          isMonotonic = false;
         }
       }
 
@@ -353,11 +422,12 @@ class SyncService {
       const updated: LocusDevice = {
         ...dev,
         name: cleanEvent.deviceName || dev.name,
+        callsign: cleanEvent.callsign || dev.callsign,
         source: cleanEvent.source || dev.source,
         state: nextState,
         confidence: typeof cleanEvent.confidence === 'number' ? cleanEvent.confidence : dev.confidence,
-        lastSeen: eventTs,
-        latestStateEventId: cleanEvent.id,
+        lastSeen: Math.max(dev.lastSeen, eventTs),
+        latestStateEventId: isHeartbeat ? dev.latestStateEventId : cleanEvent.id,
         syncStatus: 'ONLINE',
         latestTelemetry: cleanEvent.telemetry ?? dev.latestTelemetry,
         latestIncident: nextIncident,
@@ -368,17 +438,22 @@ class SyncService {
         ...this.devices.slice(existingIndex + 1),
       ];
       console.log(`[LOCUS FLEET] node updated: ${dev.id} -> ${nextState} (confidence: ${updated.confidence})`);
+      console.log('[OFFICE_KIT] updating REAL_DEVICE:', dev.id, 'source=', updated.source);
     } else {
+      const defaultCallsign = cleanEvent.deviceId.toLowerCase().includes('iqoo')
+        ? 'FIELD-01'
+        : `NODE-${cleanEvent.deviceId.slice(-4).toUpperCase()}`;
+
       const newDev: LocusDevice = {
         id: cleanEvent.deviceId,
         name: cleanEvent.deviceName || `LOCUS-NODE-${cleanEvent.deviceId.slice(0, 6)}`,
-        callsign: `NODE-${cleanEvent.deviceId.slice(-4).toUpperCase()}`,
+        callsign: cleanEvent.callsign || defaultCallsign,
         model: 'LOCUS Field Unit',
         source,
         state: cleanEvent.state === 'NETWORK' ? 'TRUSTED' : cleanEvent.state,
         confidence: cleanEvent.confidence ?? 0.98,
         lastSeen: cleanEvent.timestamp || Date.now(),
-        latestStateEventId: cleanEvent.id,
+        latestStateEventId: isHeartbeat ? undefined : cleanEvent.id,
         syncStatus: 'ONLINE',
         batteryPct: 100,
         aiReady: true,
@@ -388,8 +463,10 @@ class SyncService {
       };
       this.devices = [newDev, ...this.devices];
       console.log(`[LOCUS FLEET] new node registered: ${newDev.id} -> ${newDev.state}`);
+      console.log('[OFFICE_KIT] registering REAL_DEVICE:', newDev.id, 'source=', newDev.source);
     }
 
+    console.log('[OFFICE_KIT] device count after update:', this.devices.length, 'realCount=', this.devices.filter((d) => d.source === 'REAL_DEVICE').length);
     this.notify();
   }
 

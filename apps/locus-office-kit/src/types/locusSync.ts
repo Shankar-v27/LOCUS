@@ -34,6 +34,7 @@ export interface LocusIntegrityEvent {
   id: string | number;
   deviceId: string;
   deviceName: string;
+  callsign?: string;
   source: DeviceSource;
   timestamp: number;
   state: LocusIntegrityState;
@@ -45,6 +46,7 @@ export interface LocusIntegrityEvent {
   telemetry?: TelemetrySnapshot;
   checks?: CheckResultSummary[];
   isEnrichment?: boolean;
+  isHeartbeat?: boolean;
 }
 
 export interface LocusDevice {
