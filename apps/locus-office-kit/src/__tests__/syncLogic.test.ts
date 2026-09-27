@@ -666,8 +666,210 @@ async function runTests() {
   }
   console.log('✓ TEST 30 Passed: live SSE updates TRUSTED -> DEGRADED -> DENIED update state in place with REAL=1 throughout.');
 
+  // ==========================================
+  // RESET CONSOLE SEMANTICS TESTS (TESTS 31 - 36)
+  // ==========================================
+
+  // TEST 31: Register iqoo-15 REAL_DEVICE. POST /api/reset (syncService.resetAll()).
+  // Expected: iqoo-15 still exists, source = REAL_DEVICE, REAL count = 1.
   syncService.resetAll(true);
-  console.log('\n✓ ALL 30 SYNCHRONIZATION AND STATE TRANSITION TESTS PASSED SUCCESSFULLY!\n');
+  syncService.ingestRemoteEvent({
+    id: 801,
+    deviceId: 'iqoo-15',
+    deviceName: 'FIELD-UNIT (iQOO 15)',
+    callsign: 'FIELD-01',
+    source: 'REAL_DEVICE',
+    timestamp: Date.now(),
+    state: 'TRUSTED',
+    confidence: 0.98,
+    reason: 'nominal',
+    failedChecks: [],
+    explanation: null,
+    telemetry: { speedMps: 0, altitudeMeters: 45.2, cn0Mean: 38.0, satellites: 18 } as any,
+  });
+  // Execute console reset (simulating user clicking RESET CONSOLE button)
+  syncService.resetAll();
+  let devs31 = syncService.getDevices();
+  let metrics31 = syncService.getMetrics();
+  let iqoo31 = devs31.find(d => d.id === 'iqoo-15');
+  if (!iqoo31 || iqoo31.source !== 'REAL_DEVICE' || metrics31.realDevices !== 1 || metrics31.totalDevices !== 3) {
+    throw new Error(`Test 31 Failed: RESET CONSOLE wiped iQOO! devs=${devs31.length}, real=${metrics31.realDevices}`);
+  }
+  console.log('✓ TEST 31 Passed: Register iqoo-15 REAL_DEVICE -> RESET CONSOLE preserves iqoo-15 (1 REAL, 2 SIM, 3 TOTAL).');
+
+  // TEST 32: Register iqoo-15 as DENIED. POST /api/reset (syncService.resetAll()).
+  // Expected: iqoo-15 still exists, source = REAL_DEVICE, state remains DENIED.
+  syncService.resetAll(true);
+  syncService.ingestRemoteEvent({
+    id: 802,
+    deviceId: 'iqoo-15',
+    deviceName: 'FIELD-UNIT (iQOO 15)',
+    callsign: 'FIELD-01',
+    source: 'REAL_DEVICE',
+    timestamp: Date.now(),
+    state: 'DENIED',
+    confidence: 0.08,
+    reason: 'dual Doppler divergence',
+    failedChecks: ['cn0', 'kinematic'],
+    explanation: null,
+    telemetry: { speedMps: 0, altitudeMeters: 45.2, cn0Mean: 12.0, satellites: 4 } as any,
+  });
+  syncService.resetAll();
+  let devs32 = syncService.getDevices();
+  let iqoo32 = devs32.find(d => d.id === 'iqoo-15');
+  let metrics32 = syncService.getMetrics();
+  if (!iqoo32 || iqoo32.source !== 'REAL_DEVICE' || iqoo32.state !== 'DENIED' || metrics32.realDevices !== 1) {
+    throw new Error(`Test 32 Failed: Expected iQOO to survive reset in DENIED state! got state=${iqoo32?.state}`);
+  }
+  console.log('✓ TEST 32 Passed: Register iqoo-15 DENIED -> RESET CONSOLE preserves REAL_DEVICE with state DENIED.');
+
+  // TEST 33: Register 2 REAL_DEVICE records. POST /api/reset.
+  // Expected: both REAL devices remain.
+  syncService.resetAll(true);
+  syncService.ingestRemoteEvent({
+    id: 803,
+    deviceId: 'iqoo-15',
+    deviceName: 'FIELD-UNIT (iQOO 15)',
+    callsign: 'FIELD-01',
+    source: 'REAL_DEVICE',
+    timestamp: Date.now(),
+    state: 'TRUSTED',
+    confidence: 0.98,
+    reason: 'nominal',
+    failedChecks: [],
+    explanation: null,
+  });
+  syncService.ingestRemoteEvent({
+    id: 804,
+    deviceId: 'pixel-tablet-01',
+    deviceName: 'FIELD-UNIT-02 (Pixel Tablet)',
+    callsign: 'FIELD-02',
+    source: 'REAL_DEVICE',
+    timestamp: Date.now(),
+    state: 'TRUSTED',
+    confidence: 0.95,
+    reason: 'nominal',
+    failedChecks: [],
+    explanation: null,
+  });
+  syncService.resetAll();
+  let devs33 = syncService.getDevices();
+  let metrics33 = syncService.getMetrics();
+  let realDevs33 = devs33.filter(d => d.source === 'REAL_DEVICE');
+  if (realDevs33.length !== 2 || metrics33.realDevices !== 2 || metrics33.simulatedDevices !== 2 || metrics33.totalDevices !== 4) {
+    throw new Error(`Test 33 Failed: Expected 2 REAL devices to survive reset, got ${realDevs33.length}`);
+  }
+  console.log('✓ TEST 33 Passed: Register 2 REAL_DEVICE records -> RESET CONSOLE preserves both REAL devices (2 REAL, 2 SIM, 4 TOTAL).');
+
+  // TEST 34: Reset with no REAL_DEVICE registered.
+  // Expected: only HAWK-7 + TITAN-3.
+  syncService.resetAll(true);
+  syncService.resetAll(); // standard reset with 0 real devices
+  let devs34 = syncService.getDevices();
+  let metrics34 = syncService.getMetrics();
+  if (devs34.length !== 2 || metrics34.realDevices !== 0 || metrics34.simulatedDevices !== 2 || metrics34.totalDevices !== 2) {
+    throw new Error(`Test 34 Failed: Expected exactly 2 simulated devices, got ${devs34.length}, real=${metrics34.realDevices}`);
+  }
+  console.log('✓ TEST 34 Passed: Reset with no REAL_DEVICE registered produces only HAWK-7 and TITAN-3 (0 REAL, 2 SIM, 2 TOTAL).');
+
+  // TEST 35: After reset, send new iqoo heartbeat.
+  // Expected: exactly one iqoo-15, no duplicate.
+  syncService.resetAll(true);
+  syncService.ingestRemoteEvent({
+    id: 805,
+    deviceId: 'iqoo-15',
+    deviceName: 'FIELD-UNIT (iQOO 15)',
+    callsign: 'FIELD-01',
+    source: 'REAL_DEVICE',
+    timestamp: Date.now(),
+    state: 'TRUSTED',
+    confidence: 0.98,
+    reason: 'nominal',
+    failedChecks: [],
+    explanation: null,
+  });
+  syncService.resetAll(); // reset console
+  // Send fresh heartbeat post-reset
+  syncService.ingestRemoteEvent({
+    id: `hb-${Date.now() + 5000}`,
+    deviceId: 'iqoo-15',
+    deviceName: 'FIELD-UNIT (iQOO 15)',
+    callsign: 'FIELD-01',
+    source: 'REAL_DEVICE',
+    timestamp: Date.now() + 5000,
+    state: 'TRUSTED',
+    confidence: 0.98,
+    reason: 'heartbeat',
+    failedChecks: [],
+    explanation: null,
+    isHeartbeat: true
+  });
+  let devs35 = syncService.getDevices();
+  let iqooEntries = devs35.filter(d => d.id === 'iqoo-15');
+  let metrics35 = syncService.getMetrics();
+  if (iqooEntries.length !== 1 || metrics35.realDevices !== 1 || metrics35.totalDevices !== 3) {
+    throw new Error(`Test 35 Failed: Heartbeat after reset created duplicates: ${iqooEntries.length}`);
+  }
+  console.log('✓ TEST 35 Passed: After reset, new iqoo heartbeat updates in place with 0 duplicates (1 REAL, 2 SIM, 3 TOTAL).');
+
+  // TEST 36: Browser SSE snapshot after reset contains 1 REAL + 2 SIM and does not wipe the REAL device.
+  syncService.handleSseMessage({
+    type: 'SNAPSHOT',
+    payload: {
+      devices: [
+        {
+          id: 'iqoo-15',
+          name: 'FIELD-UNIT (iQOO 15)',
+          callsign: 'FIELD-01',
+          model: 'LOCUS Field Unit',
+          source: 'REAL_DEVICE' as const,
+          state: 'TRUSTED' as const,
+          confidence: 0.98,
+          lastSeen: Date.now(),
+          syncStatus: 'ONLINE' as const,
+          batteryPct: 100,
+          aiReady: true
+        },
+        {
+          id: 'drone-alpha-sim',
+          name: 'DRONE-ALPHA (Autonomous UAV)',
+          callsign: 'HAWK-7',
+          model: 'Edge Companion Node',
+          source: 'SIMULATED' as const,
+          state: 'TRUSTED' as const,
+          confidence: 0.95,
+          lastSeen: Date.now(),
+          syncStatus: 'ONLINE' as const,
+          batteryPct: 62,
+          aiReady: true
+        },
+        {
+          id: 'convoy-lead-sim',
+          name: 'CONVOY-ESCORT (Lead Vehicle)',
+          callsign: 'TITAN-3',
+          model: 'Fleet Tracker V2',
+          source: 'SIMULATED' as const,
+          state: 'TRUSTED' as const,
+          confidence: 0.92,
+          lastSeen: Date.now(),
+          syncStatus: 'STANDBY' as const,
+          batteryPct: 94,
+          aiReady: true
+        }
+      ],
+      events: []
+    }
+  });
+  let devs36 = syncService.getDevices();
+  let metrics36 = syncService.getMetrics();
+  let iqoo36 = devs36.find(d => d.id === 'iqoo-15');
+  if (!iqoo36 || metrics36.realDevices !== 1 || metrics36.totalDevices !== 3) {
+    throw new Error(`Test 36 Failed: Snapshot after reset mismatch: real=${metrics36.realDevices}, total=${metrics36.totalDevices}`);
+  }
+  console.log('✓ TEST 36 Passed: Browser SSE snapshot after reset contains 1 REAL + 2 SIM and retains the REAL device.');
+
+  syncService.resetAll(true);
+  console.log('\n✓ ALL 36 SYNCHRONIZATION, PERSISTENCE, TRANSITION, BOOTSTRAP, REHYDRATION, AND RESET SEMANTICS TESTS PASSED SUCCESSFULLY!\n');
 }
 
 runTests().catch((err) => {

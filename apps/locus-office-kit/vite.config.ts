@@ -276,7 +276,33 @@ function locusSyncApiPlugin(): Plugin {
           return;
         }
 
-        // 4. Status check endpoint
+        // 4. Reset endpoint for console reset button (preserves physical hardware registry)
+        if (url === '/api/reset' && req.method === 'POST') {
+          const isForceClear = req.url?.includes('force=true');
+          const realDevices = isForceClear ? [] : serverDevices.filter((d) => d.source === 'REAL_DEVICE');
+          const initialSimulated = JSON.parse(JSON.stringify(INITIAL_SERVER_DEVICES));
+          serverEvents = JSON.parse(JSON.stringify(INITIAL_SERVER_EVENTS));
+
+          serverDevices = [...realDevices, ...initialSimulated];
+
+          const sseMessage = `data: ${JSON.stringify({
+            type: 'SNAPSHOT',
+            payload: { devices: serverDevices, events: serverEvents },
+          })}\n\n`;
+          for (const client of sseClients) {
+            try {
+              client.write(sseMessage);
+            } catch {
+              sseClients.delete(client);
+            }
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, devices: serverDevices, events: serverEvents }));
+          return;
+        }
+
+        // 5. Status check endpoint
         if (url === '/api/status' && req.method === 'GET') {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(

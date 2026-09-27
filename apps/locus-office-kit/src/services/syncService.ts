@@ -585,16 +585,28 @@ class SyncService {
     this.recoveryTimers.set(deviceId, timer);
   }
 
-  public resetAll() {
+  public resetAll(forceClearReal = false) {
     try {
       localStorage.removeItem(STORAGE_KEY_DEVICES);
       localStorage.removeItem(STORAGE_KEY_EVENTS);
     } catch {
       // ignore
     }
-    this.devices = JSON.parse(JSON.stringify(INITIAL_DEVICES));
+
+    // Preserve all REAL_DEVICE records across console reset unless explicit full purge
+    const realDevices = forceClearReal
+      ? []
+      : this.devices.filter((d) => d.source === 'REAL_DEVICE');
+    const initialSimulated: LocusDevice[] = JSON.parse(JSON.stringify(INITIAL_DEVICES));
+
     this.events = JSON.parse(JSON.stringify(INITIAL_EVENTS));
+    this.devices = [...realDevices, ...initialSimulated];
     this.notify();
+
+    if (typeof window !== 'undefined' && 'fetch' in window) {
+      const url = forceClearReal ? '/api/reset?force=true' : '/api/reset';
+      fetch(url, { method: 'POST' }).catch(() => {});
+    }
   }
 }
 
