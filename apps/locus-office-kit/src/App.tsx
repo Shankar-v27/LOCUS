@@ -16,13 +16,28 @@ export const App: React.FC = () => {
   const [selectedDevice, setSelectedDevice] = useState<LocusDevice | null>(null);
 
   useEffect(() => {
-    return syncService.subscribe(() => {
+    const unsubscribe = syncService.subscribe(() => {
       setDevices(syncService.getDevices());
       setEvents(syncService.getEvents());
     });
+    setDevices(syncService.getDevices());
+    setEvents(syncService.getEvents());
+    syncService.bootstrapFromServer();
+    return unsubscribe;
   }, []);
 
   const metrics = syncService.getMetrics();
+  const rawDevices = devices;
+  const realCountBefore = rawDevices.filter((d) => d.source === 'REAL_DEVICE').length;
+  const filteredDevices = rawDevices;
+  const realCountAfter = filteredDevices.filter((d) => d.source === 'REAL_DEVICE').length;
+
+  console.log('[UI] fleet devices received', rawDevices.length);
+  console.log('[UI] REAL count before filtering', realCountBefore);
+  console.log('[UI] REAL count after filtering', realCountAfter);
+  console.log('[OFFICE_KIT UI] devices =', devices.map((d) => ({ id: d.id, source: d.source, state: d.state })));
+  console.log('[OFFICE_KIT UI] real devices =', devices.filter((d) => d.source === 'REAL_DEVICE').map((d) => d.id));
+  console.log('[OFFICE_KIT UI] real count =', metrics.realDevices, 'total count =', metrics.totalDevices);
 
   // Find the active incident on any device currently in an incident state (DEGRADED or DENIED)
   const activeDeviceWithIncident = devices.find((d) => d.state === 'DENIED' || d.state === 'DEGRADED');
